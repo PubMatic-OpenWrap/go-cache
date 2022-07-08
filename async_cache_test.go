@@ -5,261 +5,120 @@ import (
 	"testing"
 )
 
-func Test_keyStates_Set(t *testing.T) {
+func Test_keyStatus_Set(t *testing.T) {
 	type fields struct {
-		keyState map[string]state
-		mu       *sync.RWMutex
+		keys map[string]status
+		mu   *sync.RWMutex
 	}
 	type args struct {
 		key    string
-		status state
+		status status
 	}
 	tests := []struct {
 		name       string
 		fields     fields
 		args       args
 		want       bool
-		wantStatus state
-		wantErr    error
+		wantStatus status
 	}{
 		{
-			name: "With Valid key and state",
-			fields: fields{
-				keyState: map[string]state{},
-				mu:       &sync.RWMutex{},
-			},
+			name:   "With Valid key and state",
+			fields: fields(*NewKeyStatus()),
 			args: args{
 				key:    "prof_123",
-				status: INPROCESS,
+				status: STATUS_INPROCESS,
 			},
 			want:       true,
-			wantStatus: INPROCESS,
-			wantErr:    nil,
+			wantStatus: STATUS_INPROCESS,
 		},
 		{
-			name: "With InValid key and state",
-			fields: fields{
-				keyState: map[string]state{},
-				mu:       &sync.RWMutex{},
-			},
+			name:   "With InValid key and state",
+			fields: fields(*NewKeyStatus()),
 			args: args{
 				key:    "",
-				status: INPROCESS,
+				status: STATUS_INPROCESS,
 			},
-			want:    false,
-			wantErr: ErrInvalidKey,
-		},
-		{
-			name: "nil check for keystateSet",
-			fields: fields{
-				keyState: nil,
-				mu:       &sync.RWMutex{},
-			},
-			args: args{
-				key:    "",
-				status: INPROCESS,
-			},
-			want:    false,
-			wantErr: ErrKeyStateNotPresent,
+			want:       false,
+			wantStatus: STATUS_INVALID_KEY,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ks := &keyStates{
-				keyState: tt.fields.keyState,
-				mu:       tt.fields.mu,
+			ks := &keyStatus{
+				keys: tt.fields.keys,
+				mu:   tt.fields.mu,
 			}
-			got, err := ks.Set(tt.args.key, tt.args.status)
-			if got != tt.want {
-				t.Errorf("keyStates.Set() = %v, want %v", got, tt.want)
-			}
-			if err != tt.wantErr {
-				t.Errorf("keyStates.Set() Error = %v, want %v", err, tt.wantErr)
-			}
-
-		})
-	}
-}
-
-func Test_keyStates_set(t *testing.T) {
-	type fields struct {
-		keyState map[string]state
-		mu       *sync.RWMutex
-	}
-	type args struct {
-		k string
-		s state
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
-	}{
-		{
-			name: "With Valid key and state",
-			fields: fields{
-				keyState: map[string]state{},
-			},
-			args: args{
-				k: "prof_123",
-				s: INPROCESS,
-			},
-			want: true,
-		},
-		{
-			name: "With Invalid key and  valid state",
-			fields: fields{
-				keyState: map[string]state{},
-			},
-			args: args{
-				k: "",
-				s: INPROCESS,
-			},
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ks := &keyStates{
-				keyState: tt.fields.keyState,
-				mu:       tt.fields.mu,
-			}
-			if got := ks.set(tt.args.k, tt.args.s); got != tt.want {
-				t.Errorf("keyStates.set() = %v, want %v", got, tt.want)
+			if got := ks.Set(tt.args.key, tt.args.status); got != tt.want {
+				t.Errorf("keyStatus.Set() = %v, want %v", got, tt.want)
+				t.Errorf("KeyStatys.Set() sets status %v, want status %v", tt.args.status, tt.wantStatus)
 			}
 		})
 	}
 }
 
-func Test_keyStates_get(t *testing.T) {
+func Test_keyStatus_Get(t *testing.T) {
 	type fields struct {
-		keyState map[string]state
-		mu       *sync.RWMutex
-	}
-	type args struct {
-		k string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   state
-		want1  bool
-	}{
-		{
-			name: "With Valid key and  valid state",
-			fields: fields{
-				keyState: map[string]state{"prof_123": DONE},
-			},
-			args: args{
-				k: "prof_123",
-			},
-			want:  DONE,
-			want1: true,
-		},
-		{
-			name: "With InValid key and  invalid state ",
-			fields: fields{
-				keyState: map[string]state{},
-			},
-			args: args{
-				k: "",
-			},
-			want:  NOPRESENT,
-			want1: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ks := &keyStates{
-				keyState: tt.fields.keyState,
-				mu:       tt.fields.mu,
-			}
-			got, got1 := ks.get(tt.args.k)
-			if got != tt.want {
-				t.Errorf("keyStates.get() got = %v, want %v", got, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("keyStates.get() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-}
-
-func Test_keyStates_Get(t *testing.T) {
-	type fields struct {
-		keyState map[string]state
-		mu       *sync.RWMutex
+		keys map[string]status
+		mu   *sync.RWMutex
 	}
 	type args struct {
 		key string
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    state
-		wantErr error
+		name   string
+		fields fields
+		args   args
+		want   status
 	}{
 		{
 			name: "With Valid key and state as DONE",
 			fields: fields{
-				keyState: map[string]state{"prof_123": DONE},
+				keys: map[string]status{"prof_123": STATUS_DONE},
 			},
 			args: args{
 				key: "prof_123",
 			},
-			want:    DONE,
-			wantErr: nil,
-		},
-		{
-			name: "With InValid key and state",
-			fields: fields{
-				keyState: map[string]state{"prof_123": DONE},
-			},
-			args: args{
-				key: "",
-			},
-			want:    INVALID,
-			wantErr: ErrInvalidKey,
+			want: STATUS_DONE,
 		},
 		{
 			name: "With Valid key and state as INPROCESS",
 			fields: fields{
-				keyState: map[string]state{"prof_123": INPROCESS},
+				keys: map[string]status{"prof_123": STATUS_INPROCESS},
 			},
 			args: args{
 				key: "prof_123",
 			},
-			want:    INPROCESS,
-			wantErr: nil,
+			want: STATUS_INPROCESS,
 		},
 		{
-			name: "nil check",
+			name: "With Valid key but not present in keys",
 			fields: fields{
-				keyState: nil,
+				keys: map[string]status{"prof_123": STATUS_INPROCESS},
 			},
 			args: args{
-				key: "prof_123",
+				key: "getAdUnit_5890",
 			},
-			want:    INVALID,
-			wantErr: ErrKeyStateNotPresent,
+			want: STATUS_NOTPRESENT,
+		},
+		{
+			name: "With Invalid key and state as INPROCESS",
+			fields: fields{
+				keys: map[string]status{"prof_123": STATUS_INPROCESS},
+			},
+			args: args{
+				key: "",
+			},
+			want: STATUS_INVALID_KEY,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ks := &keyStates{
-				keyState: tt.fields.keyState,
-				mu:       tt.fields.mu,
+			ks := &keyStatus{
+				keys: tt.fields.keys,
+				mu:   tt.fields.mu,
 			}
-			got, err := ks.Get(tt.args.key)
-			if err != tt.wantErr {
-				t.Errorf("keyStates.Get() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("keyStates.Get() = %v, want %v", got, tt.want)
+			if got := ks.Get(tt.args.key); got != tt.want {
+				t.Errorf("keyStatus.Get() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -1,102 +1,55 @@
 package cache
 
 import (
-	"fmt"
 	"sync"
 )
 
-//Error Codes for keystates
-var (
-	ErrInvalidKey         = fmt.Errorf("found invalid key")
-	ErrItemNotPresent     = fmt.Errorf("item not present")
-	ErrKeyStateNotPresent = fmt.Errorf("keystate datastructure not initialized")
-)
-
-//keyState structure
-type keyStates struct {
-	keyState map[string]state //states{INPROCESS,DONE,INVALID,NOPRESENT}
-	mu       *sync.RWMutex    //RWmutex
-}
-
-type state int
-
-//states declared in constants
+//status for keys/process declared in constants
 const (
-	INPROCESS state = iota
-	DONE
-	INVALID
-	NOPRESENT
+	STATUS_INPROCESS status = iota
+	STATUS_DONE
+	STATUS_INVALID
+	STATUS_NOTPRESENT
+	STATUS_INVALID_KEY
 )
 
-var ks keyStates
-
-//initializing ks keyStates
-func init() {
-	ks.keyState = make(map[string]state)
-	ks.mu = &sync.RWMutex{}
+type keyStatus struct {
+	keys map[string]status //status{INPROCESS,DONE,INVALID,NOPRESENT,INVALID_KEY}
+	mu   *sync.RWMutex
 }
 
-//Set status/state with respective key in keyState
-func (ks *keyStates) Set(key string, status state) (bool, error) {
-	ok := false
-	if ks != nil && ks.keyState != nil {
+type status int
+
+//To Create A New keyStatus
+func NewKeyStatus() *keyStatus {
+	return &keyStatus{
+		keys: make(map[string]status),
+		mu:   &sync.RWMutex{},
+	}
+}
+
+//Set status/status with respective key in keyStatus
+func (ks *keyStatus) Set(key string, status status) bool {
+
+	if len(key) > 0 {
 		ks.mu.Lock()
-		ok = ks.set(key, status)
+		ks.keys[key] = status
 		ks.mu.Unlock()
 	} else {
-		return false, ErrKeyStateNotPresent
-	}
-	if !ok {
-		return false, ErrInvalidKey
-	}
-	return true, nil
-}
-
-//utility set used in Set
-func (ks *keyStates) set(k string, s state) bool {
-	if len(k) <= 0 {
 		return false
 	}
-	ks.keyState[k] = s
 	return true
 }
 
-//Get status/state of respective key in keyState
-func (ks *keyStates) Get(key string) (state, error) {
-	var (
-		status state
-		ok     bool
-	)
-	if !isValid(key) {
-		return INVALID, ErrInvalidKey
-	}
-	if ks != nil && ks.keyState != nil {
-		status, ok = ks.get(key)
+//Get status/status of respective key in keyStatus
+func (ks *keyStatus) Get(key string) status {
+	if len(key) == 0 {
+		return STATUS_INVALID_KEY
 	} else {
-		return INVALID, ErrKeyStateNotPresent
-	}
-
-	if !ok {
-		return NOPRESENT, ErrItemNotPresent
-	}
-
-	return status, nil
-}
-
-//utility get for Get
-func (ks *keyStates) get(k string) (state, bool) {
-	item, found := ks.keyState[k]
-	if !found {
-		return NOPRESENT, false
-	}
-	return item, true
-}
-
-//checkKeyvalidity
-func isValid(key string) bool {
-	if len(key) > 0 {
-		return true
-	} else {
-		return false
+		status, found := ks.keys[key]
+		if !found {
+			return STATUS_NOTPRESENT
+		}
+		return status
 	}
 }
