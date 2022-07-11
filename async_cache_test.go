@@ -6,9 +6,10 @@ import (
 )
 
 func Test_keyStatus_Set(t *testing.T) {
+
 	type fields struct {
-		keys map[string]status
-		mu   *sync.RWMutex
+		keyMap map[string]status
+		mu     *sync.RWMutex
 	}
 	type args struct {
 		key    string
@@ -18,7 +19,6 @@ func Test_keyStatus_Set(t *testing.T) {
 		name       string
 		fields     fields
 		args       args
-		want       bool
 		wantStatus status
 	}{
 		{
@@ -28,7 +28,6 @@ func Test_keyStatus_Set(t *testing.T) {
 				key:    "prof_123",
 				status: STATUS_INPROCESS,
 			},
-			want:       true,
 			wantStatus: STATUS_INPROCESS,
 		},
 		{
@@ -38,18 +37,17 @@ func Test_keyStatus_Set(t *testing.T) {
 				key:    "",
 				status: STATUS_INPROCESS,
 			},
-			want:       false,
 			wantStatus: STATUS_INVALID_KEY,
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ks := &keyStatus{
-				keys: tt.fields.keys,
-				mu:   tt.fields.mu,
-			}
-			if got := ks.Set(tt.args.key, tt.args.status); got != tt.want {
-				t.Errorf("keyStatus.Set() = %v, want %v", got, tt.want)
+			ks := NewKeyStatus()
+			t.Parallel()
+			ks.Set(tt.args.key, tt.args.status)
+			if ks.Get(tt.args.key) != tt.wantStatus {
+				t.Log(tt.fields.keyMap)
 				t.Errorf("KeyStatys.Set() sets status %v, want status %v", tt.args.status, tt.wantStatus)
 			}
 		})
@@ -57,24 +55,23 @@ func Test_keyStatus_Set(t *testing.T) {
 }
 
 func Test_keyStatus_Get(t *testing.T) {
-	type fields struct {
-		keys map[string]status
-		mu   *sync.RWMutex
-	}
+
 	type args struct {
 		key string
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   status
+		name string
+		KeyS keyStatus
+		args args
+		want status
 	}{
 		{
 			name: "With Valid key and state as DONE",
-			fields: fields{
-				keys: map[string]status{"prof_123": STATUS_DONE},
-			},
+			KeyS: func() keyStatus {
+				ks := NewKeyStatus()
+				ks.Set("prof_123", STATUS_DONE)
+				return *ks
+			}(),
 			args: args{
 				key: "prof_123",
 			},
@@ -82,19 +79,20 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 		{
 			name: "With Valid key and state as INPROCESS",
-			fields: fields{
-				keys: map[string]status{"prof_123": STATUS_INPROCESS},
-			},
+			KeyS: func() keyStatus {
+				ks := NewKeyStatus()
+				ks.Set("prof_123", STATUS_INPROCESS)
+				return *ks
+			}(),
+
 			args: args{
 				key: "prof_123",
 			},
 			want: STATUS_INPROCESS,
 		},
 		{
-			name: "With Valid key but not present in keys",
-			fields: fields{
-				keys: map[string]status{"prof_123": STATUS_INPROCESS},
-			},
+			name: "With Valid key but not present in keyMap",
+			KeyS: *NewKeyStatus(),
 			args: args{
 				key: "getAdUnit_5890",
 			},
@@ -102,9 +100,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 		{
 			name: "With Invalid key and state as INPROCESS",
-			fields: fields{
-				keys: map[string]status{"prof_123": STATUS_INPROCESS},
-			},
+			KeyS: *NewKeyStatus(),
 			args: args{
 				key: "",
 			},
@@ -112,11 +108,11 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ks := &keyStatus{
-				keys: tt.fields.keys,
-				mu:   tt.fields.mu,
-			}
+			ks := NewKeyStatus()
+			ks.keyMap = tt.KeyS.keyMap
+			t.Parallel()
 			if got := ks.Get(tt.args.key); got != tt.want {
 				t.Errorf("keyStatus.Get() = %v, want %v", got, tt.want)
 			}
