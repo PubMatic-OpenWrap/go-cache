@@ -20,7 +20,6 @@ func Test_fetcher_Register(t *testing.T) {
 		args   args
 		want   bool
 	}{
-		// TODO: Add test cases.
 		{
 			name:   "Registering Invalid KeyPrefix",
 			fields: fields(*NewFetcher(5)),
@@ -77,7 +76,6 @@ func Test_fetcher_Execute(t *testing.T) {
 		want    interface{}
 		wantErr bool
 	}{
-		// TODO: Add test cases.
 		{
 			name: "Invalid Key",
 			fields: fields{
