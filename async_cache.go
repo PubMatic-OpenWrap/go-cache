@@ -14,11 +14,11 @@ type tstatus struct {
 
 //status for keys/process declared in constants
 const (
-	STATUS_NOTPRESENT            status = iota //current key is not present in KeyMap
-	STATUS_INPROCESS                           // current key/process is already INPROCESS to fetch data from data source
-	STATUS_DONE                                //current key/process have DONE fetching data and updated in cache
-	STATUS_STATUS_INTERNAL_ERROR               //current key/process recieved internal_error while fetching data
-	STATUS_INVALID_KEY                         // current key is invalid to be fetched
+	STATUS_NOTPRESENT     status = iota //current key is not present in KeyMap
+	STATUS_INPROCESS                    // current key/process is already INPROCESS to fetch data from data source
+	STATUS_DONE                         //current key/process have DONE fetching data and updated in cache
+	STATUS_INTERNAL_ERROR               //current key/process recieved internal_error while fetching data
+	STATUS_INVALID_KEY                  // current key is invalid to be fetched
 )
 
 type keyStatus struct {
@@ -29,23 +29,16 @@ type keyStatus struct {
 
 //Initiating DefaulTime and Time-related contants
 const (
-	DEFAULT_EXPIRATION = 0
+	EXPIRATION_TIME = 30 * time.Minute
 )
 
 //To Create A New keyStatus
-func NewKeyStatus() *keyStatus {
+func NewKeyStatus(purge_time time.Duration) *keyStatus {
 	return &keyStatus{
 		keyMap:    make(map[string]tstatus),
 		mu:        &sync.RWMutex{},
-		purgeTime: DEFAULT_EXPIRATION,
+		purgeTime: purge_time,
 	}
-}
-
-//utility function to Update Keystatus.purgeTime
-func (ks *keyStatus) updatePurgetime(td time.Duration) {
-	ks.mu.Lock()
-	ks.purgeTime = td
-	ks.mu.Unlock()
 }
 
 //Set status/status with respective key in keyStatus
@@ -94,7 +87,7 @@ func (ks *keyStatus) deleteExpiredKeys() {
 }
 
 //time-based triggering for purging based on keyStatus.tstatus.purgeTime
-func (ks *keyStatus) Purge() {
+func (ks *keyStatus) purge() {
 	ticker := time.NewTicker(ks.purgeTime)
 	go func() {
 		for range ticker.C {

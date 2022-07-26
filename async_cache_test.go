@@ -26,7 +26,7 @@ func Test_keyStatus_Set(t *testing.T) {
 	}{
 		{
 			name:   "With Valid key and state",
-			fields: fields(*NewKeyStatus()),
+			fields: fields(*NewKeyStatus(EXPIRATION_TIME)),
 			args: args{
 				key:    "prof_123",
 				status: STATUS_INPROCESS,
@@ -35,7 +35,7 @@ func Test_keyStatus_Set(t *testing.T) {
 		},
 		{
 			name:   "With InValid key and state",
-			fields: fields(*NewKeyStatus()),
+			fields: fields(*NewKeyStatus(EXPIRATION_TIME)),
 			args: args{
 				key:    "",
 				status: STATUS_INPROCESS,
@@ -46,7 +46,7 @@ func Test_keyStatus_Set(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ks := NewKeyStatus()
+			ks := NewKeyStatus(EXPIRATION_TIME)
 			t.Parallel()
 			ks.Set(tt.args.key, tt.args.status)
 			if ks.Get(tt.args.key) != tt.wantStatus {
@@ -71,7 +71,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		{
 			name: "With Valid key and state as DONE",
 			KeyS: func() keyStatus {
-				ks := NewKeyStatus()
+				ks := NewKeyStatus(EXPIRATION_TIME)
 				ks.Set("prof_123", STATUS_DONE)
 				return *ks
 			}(),
@@ -83,7 +83,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		{
 			name: "With Valid key and state as INPROCESS",
 			KeyS: func() keyStatus {
-				ks := NewKeyStatus()
+				ks := NewKeyStatus(EXPIRATION_TIME)
 				ks.Set("prof_123", STATUS_INPROCESS)
 				return *ks
 			}(),
@@ -95,7 +95,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 		{
 			name: "With Valid key but not present in keyMap",
-			KeyS: *NewKeyStatus(),
+			KeyS: *NewKeyStatus(EXPIRATION_TIME),
 			args: args{
 				key: "getAdUnit_5890",
 			},
@@ -103,7 +103,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 		{
 			name: "With Invalid key and state as INPROCESS",
-			KeyS: *NewKeyStatus(),
+			KeyS: *NewKeyStatus(EXPIRATION_TIME),
 			args: args{
 				key: "",
 			},
@@ -113,7 +113,7 @@ func Test_keyStatus_Get(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ks := NewKeyStatus()
+			ks := NewKeyStatus(EXPIRATION_TIME)
 			ks.keyMap = tt.KeyS.keyMap
 			t.Parallel()
 			if got := ks.Get(tt.args.key); got != tt.want {
@@ -124,10 +124,10 @@ func Test_keyStatus_Get(t *testing.T) {
 }
 
 func testFillKeyCache() map[string]tstatus {
-	ks := NewKeyStatus()
+	ks := NewKeyStatus(2 * time.Second)
 	ks.Set("prof_5890", STATUS_INPROCESS)
 	ks.Set("aucf_739", STATUS_INVALID_KEY)
-	ks.Set("aucf_111", STATUS_STATUS_INTERNAL_ERROR)
+	ks.Set("aucf_111", STATUS_INTERNAL_ERROR)
 	ks.Set("prof_202", STATUS_NOTPRESENT)
 	ks.keyMap["prof_Alive1"] = tstatus{
 		value:          STATUS_INPROCESS,
@@ -171,7 +171,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ks := tt.fields
-			ks.Purge()
+			ks.purge()
 			time.Sleep(10 * time.Second)
 			mapper := ks.keyMap
 			kV := make(map[string]status)
@@ -183,5 +183,15 @@ func Test_keyStatus_Purge(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func Benchmark_keyStatus_DeleteKeysWithInbuiltDelete(b *testing.B) {
+	b.StopTimer()
+	ks := NewKeyStatus(EXPIRATION_TIME)
+	ks.keyMap = testFillKeyCache()
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		ks.deleteExpiredKeys()
 	}
 }
