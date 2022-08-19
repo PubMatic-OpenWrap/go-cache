@@ -3,11 +3,12 @@ package cache
 import (
 	"errors"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+const EXPIRATION_TIME = 30 * time.Minute
 
 func Test_keyStatus_Set(t *testing.T) {
 
@@ -207,7 +208,6 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		args       args
 		want       interface{}
 		wantStatus status
-		wantErr    error
 		as         AsyncCache
 	}{
 		{name: "Hitting first call request",
@@ -216,16 +216,14 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			},
 			want:       nil,
 			wantStatus: STATUS_INPROCESS,
-			wantErr:    nil,
 			as:         *InitAsyncCache(),
 		},
-		{name: "getting data if data is already present in AsyncCache",
+		{name: "getting data if data is already present in AsyncCache with status DONE",
 			args: args{
 				key: "PROF_5890",
 			},
 			want:       "profile_5890_201",
 			wantStatus: STATUS_DONE,
-			wantErr:    nil,
 			as: func() AsyncCache {
 				as1 := InitAsyncCache()
 				as1.gCache.Set("PROF_5890", "profile_5890_201", as1.keystatus.purgeTime)
@@ -233,13 +231,12 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				return *as1
 			}(),
 		},
-		{name: "Invalid datasource response with internal error ",
+		{name: "With an Invalid datasource response with internal error ",
 			args: args{
 				key: "CONF_5890",
 			},
 			want:       nil,
 			wantStatus: STATUS_INTERNAL_ERROR,
-			wantErr:    errors.New("error : internal error from data source"),
 			as: func() AsyncCache {
 				as1 := InitAsyncCache()
 				return *as1
@@ -251,11 +248,26 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			},
 			want:       "profile_5890_201",
 			wantStatus: STATUS_DONE,
-			wantErr:    nil,
 			as: func() AsyncCache {
-				ac := NewAsyncCache(4, 8*time.Second, 0)
-				ac.fetcher.Register("PROF", getProf)
-				ac.fetcher.Register("CONF", getConf)
+				f := NewFetcher(4)
+				f.Register("PROF", getProf)
+				f.Register("CONF", getConf)
+				ac := NewAsyncCache(f, 8*time.Second, 0)
+				return *ac
+			}(),
+		},
+		{name: "request with already INPROCESS status",
+			args: args{
+				key: "PROF_5890",
+			},
+			want:       nil,
+			wantStatus: STATUS_INPROCESS,
+			as: func() AsyncCache {
+				f := NewFetcher(4)
+				f.Register("PROF", getProf)
+				f.Register("CONF", getConf)
+				ac := NewAsyncCache(f, 8*time.Second, 0)
+				ac.keystatus.Set("PROF_5890", STATUS_INPROCESS)
 				return *ac
 			}(),
 		},
@@ -265,17 +277,12 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ac := tt.as
 			//we will be calling AsyncGet to explicitly set the data with key
-			if tt.name == "Demonstrating asyncUpdate call" || tt.name == "Invalid datasource response with internal error " {
+			if tt.name == "Demonstrating asyncUpdate call" || tt.name == "With an Invalid datasource response with internal error " {
 				ac.AsyncGet(tt.args.key)
-				time.Sleep(1 * time.Millisecond)
 			}
-			got, got1, err := ac.AsyncGet(tt.args.key)
-			if err != nil && tt.wantErr != nil {
-				diff := strings.Contains(err.Error(), tt.wantErr.Error())
-				if !diff {
-					t.Errorf("AsyncCache.AsyncGet() error = %v, wantErr %v", err, tt.wantErr)
-				}
-			}
+			time.Sleep(1 * time.Millisecond)
+			got, got1 := ac.AsyncGet(tt.args.key)
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("AsyncCache.AsyncGet() got data = %v, want data %v", got, tt.want)
 			}
@@ -287,9 +294,10 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 }
 
 func InitAsyncCache() *AsyncCache {
-	ac := NewAsyncCache(4, 8*time.Second, 1*time.Millisecond)
-	ac.fetcher.Register("PROF", getProf)
-	ac.fetcher.Register("CONF", getConf)
+	f := NewFetcher(4)
+	f.Register("PROF", getProf)
+	f.Register("CONF", getConf)
+	ac := NewAsyncCache(f, 8*time.Second, 1000*time.Millisecond)
 	return ac
 }
 

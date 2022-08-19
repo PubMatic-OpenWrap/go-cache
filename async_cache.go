@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"errors"
 	"sync"
 	"time"
 )
@@ -34,11 +33,6 @@ type AsyncCache struct {
 	fetcher   *fetcher
 	keystatus *keyStatus
 }
-
-//Initiating DefaulTime and Time-related contants
-const (
-	EXPIRATION_TIME = 30 * time.Minute
-)
 
 //To Create A New keyStatus
 func NewKeyStatus(purge_time time.Duration) *keyStatus {
@@ -105,61 +99,47 @@ func (ks *keyStatus) purge() {
 }
 
 //Init NewAsyncCache
-// set cache_expiration to 0 , to use default EXPIRATION_TIME --> 30 Minutes
-func NewAsyncCache(prefix_len int, purge_time time.Duration, cache_expiration time.Duration) *AsyncCache {
-	if cache_expiration == 0 {
-		cache_expiration = EXPIRATION_TIME
-	}
+func NewAsyncCache(fetcher *fetcher, purgeTime time.Duration, expiryTime time.Duration) *AsyncCache {
 	return &AsyncCache{
-		fetcher:   NewFetcher(prefix_len),
-		keystatus: NewKeyStatus(purge_time),
-		gCache:    New(cache_expiration, purge_time),
+		fetcher:   fetcher,
+		keystatus: NewKeyStatus(purgeTime),
+		gCache:    New(expiryTime, purgeTime),
 	}
 }
 
-func (ac *AsyncCache) AsyncGet(key string) (interface{}, status, error) {
+func (ac *AsyncCache) AsyncGet(key string) (interface{}, status) {
 	//Fetching from cache
-	cache_status := STATUS_INPROCESS
 	data, ok := ac.gCache.Get(key)
 	if ok {
-		return data, STATUS_DONE, nil
-	} else if !ok && ac.keystatus.Get(key) == STATUS_INPROCESS {
-		//data not present in cache and status INPROCESS
-		return data, cache_status, nil
-	} else if ac.keystatus.Get(key) == STATUS_INTERNAL_ERROR {
-		//returning error for internal error
-		return data, STATUS_INTERNAL_ERROR, errors.New("error : internal error from data source")
-	} else if !ok && ac.keystatus.Get(key) != STATUS_INPROCESS {
-		//New Call for the key, updating KeyStatus for key to Status INPROCESS
-		ac.keystatus.Set(key, cache_status)
-		//asyncCall to DB/dataSource
-		go asyncUpdate(ac, key)
+		return data, STATUS_DONE
 	}
+	currStatus := ac.keystatus.Get(key)
+	if currStatus == STATUS_INPROCESS {
+		//data not present in cache and status INPROCESS
+		return data, STATUS_INPROCESS
+	} else if currStatus == STATUS_INTERNAL_ERROR {
+		//returning error for internal error
+		return data, STATUS_INTERNAL_ERROR
+	}
+	//New Call for the key, updating KeyStatus for key to Status INPROCESS
+	ac.keystatus.Set(key, STATUS_INPROCESS)
+	//asyncCall to DB/dataSource
+	go ac.asyncUpdate(key)
 	//returning data and cache/keystatus
-	return data, cache_status, nil
+	return data, STATUS_INPROCESS
 }
 
-func asyncUpdate(ac *AsyncCache, key string) {
-	done := make(chan bool, 1)
-	go func(done_status chan bool) {
-		dataStatus := STATUS_INPROCESS
-		fetchedData, err := ac.fetcher.Execute(key)
-		// fetching and returning data
-		if err != nil {
-			// Response Error from DB/Fetcher error
-			dataStatus = STATUS_INTERNAL_ERROR
-			ac.keystatus.Set(key, dataStatus)
-			done <- true
-			return
-		}
-		ac.gCache.Set(key, fetchedData, ac.keystatus.purgeTime)
-		dataStatus = STATUS_DONE
+func (ac *AsyncCache) asyncUpdate(key string) {
+	dataStatus := STATUS_INPROCESS
+	fetchedData, err := ac.fetcher.Execute(key)
+	// fetching and returning data
+	if err != nil {
+		// Response Error from DB/Fetcher error
+		dataStatus = STATUS_INTERNAL_ERROR
 		ac.keystatus.Set(key, dataStatus)
-
-		//updating async-update process status
-		done_status <- true
-
-	}(done)
-	<-done
-	close(done)
+		return
+	}
+	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
+	dataStatus = STATUS_DONE
+	ac.keystatus.Set(key, dataStatus)
 }
