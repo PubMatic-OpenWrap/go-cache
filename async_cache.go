@@ -144,6 +144,9 @@ func asyncUpdate(ac *AsyncCache, key string) {
 		if err != nil {
 			// Response Error from DB/Fetcher error
 			dataStatus = STATUS_INTERNAL_ERROR
+			ac.keystatus.Set(key, dataStatus)
+			done <- true
+			return
 		}
 		ac.gCache.Set(key, fetchedData, ac.keystatus.purgeTime)
 		dataStatus = STATUS_DONE
