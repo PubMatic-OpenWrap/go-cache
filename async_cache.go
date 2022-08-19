@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -125,6 +126,9 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, status, error) {
 	} else if !ok && ac.keystatus.Get(key) == STATUS_INPROCESS {
 		//data not present in cache and status INPROCESS
 		return data, cache_status, nil
+	} else if ac.keystatus.Get(key) == STATUS_INTERNAL_ERROR {
+		//returning error for internal error
+		return data, STATUS_INTERNAL_ERROR, errors.New("error : internal error from data source")
 	} else if !ok && ac.keystatus.Get(key) != STATUS_INPROCESS {
 		//New Call for the key, updating KeyStatus for key to Status INPROCESS
 		ac.keystatus.Set(key, cache_status)
