@@ -27,6 +27,13 @@ type keyStatus struct {
 	purgeTime time.Duration
 }
 
+//Async Cache
+type AsyncCache struct {
+	gCache    *Cache
+	fetcher   *fetcher
+	keystatus *keyStatus
+}
+
 //Initiating DefaulTime and Time-related contants
 const (
 	EXPIRATION_TIME = 30 * time.Minute
@@ -94,4 +101,58 @@ func (ks *keyStatus) purge() {
 			ks.deleteExpiredKeys()
 		}
 	}()
+}
+
+//Init NewAsyncCache
+// set cache_expiration to 0 , to use default EXPIRATION_TIME --> 30 Minutes
+func NewAsyncCache(prefix_len int, purge_time time.Duration, cache_expiration time.Duration) *AsyncCache {
+	if cache_expiration == 0 {
+		cache_expiration = EXPIRATION_TIME
+	}
+	return &AsyncCache{
+		fetcher:   NewFetcher(prefix_len),
+		keystatus: NewKeyStatus(purge_time),
+		gCache:    New(cache_expiration, purge_time),
+	}
+}
+
+func (ac *AsyncCache) AsyncGet(key string) (interface{}, status, error) {
+	//Fetching from cache
+	cache_status := STATUS_INPROCESS
+	data, ok := ac.gCache.Get(key)
+	if ok {
+		return data, STATUS_DONE, nil
+	} else if !ok && ac.keystatus.Get(key) == STATUS_INPROCESS {
+		//data not present in cache and status INPROCESS
+		return data, cache_status, nil
+	} else if !ok && ac.keystatus.Get(key) != STATUS_INPROCESS {
+		//New Call for the key, updating KeyStatus for key to Status INPROCESS
+		ac.keystatus.Set(key, cache_status)
+		//asyncCall to DB/dataSource
+		go asyncUpdate(ac, key)
+	}
+	//returning data and cache/keystatus
+	return data, cache_status, nil
+}
+
+func asyncUpdate(ac *AsyncCache, key string) {
+	done := make(chan bool, 1)
+	go func(done_status chan bool) {
+		dataStatus := STATUS_INPROCESS
+		fetchedData, err := ac.fetcher.Execute(key)
+		// fetching and returning data
+		if err != nil {
+			// Response Error from DB/Fetcher error
+			dataStatus = STATUS_INTERNAL_ERROR
+		}
+		ac.gCache.Set(key, fetchedData, ac.keystatus.purgeTime)
+		dataStatus = STATUS_DONE
+		ac.keystatus.Set(key, dataStatus)
+
+		//updating async-update process status
+		done_status <- true
+
+	}(done)
+	<-done
+	close(done)
 }
