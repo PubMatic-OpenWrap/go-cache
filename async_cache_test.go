@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -124,15 +126,12 @@ func Test_keyStatus_Get(t *testing.T) {
 }
 
 func testFillKeyCache() map[string]tstatus {
-	ks := NewKeyStatus(2 * time.Second)
+	ks := NewKeyStatus(25 * time.Millisecond)
 	ks.Set("prof_5890", STATUS_INPROCESS)
 	ks.Set("aucf_739", STATUS_INVALID_KEY)
 	ks.Set("aucf_111", STATUS_INTERNAL_ERROR)
 	ks.Set("prof_202", STATUS_NOTPRESENT)
-	ks.keyMap["prof_Alive1"] = tstatus{
-		value:          STATUS_INPROCESS,
-		expirationTime: time.Now().Add(5 * time.Second),
-	}
+
 	ks.keyMap["prof_Alive2"] = tstatus{
 		value:          STATUS_DONE,
 		expirationTime: time.Now().Add(3 * time.Minute),
@@ -152,7 +151,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 			fields: &keyStatus{
 				keyMap:    testFillKeyCache(),
 				mu:        &sync.RWMutex{},
-				purgeTime: 2 * time.Second,
+				purgeTime: 25 * time.Millisecond,
 			},
 			want: map[string]status{
 				"prof_Alive2": STATUS_DONE,
@@ -163,7 +162,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 			fields: &keyStatus{
 				keyMap:    make(map[string]tstatus),
 				mu:        &sync.RWMutex{},
-				purgeTime: 2 * time.Second,
+				purgeTime: 250 * time.Millisecond,
 			},
 			want: map[string]status{},
 		},
@@ -172,7 +171,9 @@ func Test_keyStatus_Purge(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ks := tt.fields
 			ks.purge()
-			time.Sleep(10 * time.Second)
+			if tt.name == "Purging with valid expired keys" {
+				time.Sleep(1000 * time.Millisecond)
+			}
 			mapper := ks.keyMap
 			kV := make(map[string]status)
 			for k, v := range mapper {
@@ -194,4 +195,108 @@ func Benchmark_keyStatus_DeleteKeysWithInbuiltDelete(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		ks.deleteExpiredKeys()
 	}
+}
+
+func TestAsyncCache_AsyncGet(t *testing.T) {
+
+	type args struct {
+		key string
+	}
+	tests := []struct {
+		name       string
+		args       args
+		want       interface{}
+		wantStatus status
+		wantErr    error
+		as         AsyncCache
+	}{
+		{name: "Hitting first call request",
+			args: args{
+				key: "PROF_5890",
+			},
+			want:       nil,
+			wantStatus: STATUS_INPROCESS,
+			wantErr:    nil,
+			as:         *InitAsyncCache(),
+		},
+		{name: "getting data if data is already present in AsyncCache",
+			args: args{
+				key: "PROF_5890",
+			},
+			want:       "profile_5890_201",
+			wantStatus: STATUS_DONE,
+			wantErr:    nil,
+			as: func() AsyncCache {
+				as1 := InitAsyncCache()
+				as1.gCache.Set("PROF_5890", "profile_5890_201", as1.keystatus.purgeTime)
+				as1.keystatus.Set("PROF_5890", STATUS_DONE)
+				return *as1
+			}(),
+		},
+		{name: "Invalid datasource response with internal error ",
+			args: args{
+				key: "CONF_5890",
+			},
+			want:       nil,
+			wantStatus: STATUS_INTERNAL_ERROR,
+			wantErr:    errors.New("error : internal error from data source"),
+			as: func() AsyncCache {
+				as1 := InitAsyncCache()
+				return *as1
+			}(),
+		},
+		{name: "Demonstrating asyncUpdate call",
+			args: args{
+				key: "PROF_5890",
+			},
+			want:       "profile_5890_201",
+			wantStatus: STATUS_DONE,
+			wantErr:    nil,
+			as: func() AsyncCache {
+				ac := NewAsyncCache(4, 8*time.Second, 0)
+				ac.fetcher.Register("PROF", getProf)
+				ac.fetcher.Register("CONF", getConf)
+				return *ac
+			}(),
+		},
+	}
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+			ac := tt.as
+			//we will be calling AsyncGet to explicitly set the data with key
+			if tt.name == "Demonstrating asyncUpdate call" || tt.name == "Invalid datasource response with internal error " {
+				ac.AsyncGet(tt.args.key)
+				time.Sleep(1 * time.Millisecond)
+			}
+			got, got1, err := ac.AsyncGet(tt.args.key)
+			if err != nil && tt.wantErr != nil {
+				diff := strings.Contains(err.Error(), tt.wantErr.Error())
+				if !diff {
+					t.Errorf("AsyncCache.AsyncGet() error = %v, wantErr %v", err, tt.wantErr)
+				}
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AsyncCache.AsyncGet() got data = %v, want data %v", got, tt.want)
+			}
+			if got1 != tt.wantStatus {
+				t.Errorf("AsyncCache.AsyncGet() got Status = %v, want Status %v", got1, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func InitAsyncCache() *AsyncCache {
+	ac := NewAsyncCache(4, 8*time.Second, 1*time.Millisecond)
+	ac.fetcher.Register("PROF", getProf)
+	ac.fetcher.Register("CONF", getConf)
+	return ac
+}
+
+func getProf(key string) (interface{}, error) {
+	data := "profile_5890_201"
+	return data, nil
+}
+func getConf(key string) (interface{}, error) {
+	return nil, errors.New("err:getting configs")
 }
