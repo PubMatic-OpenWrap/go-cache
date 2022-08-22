@@ -130,16 +130,13 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, status) {
 }
 
 func (ac *AsyncCache) asyncUpdate(key string) {
-	dataStatus := STATUS_INPROCESS
 	fetchedData, err := ac.fetcher.Execute(key)
 	// fetching and returning data
 	if err != nil {
 		// Response Error from DB/Fetcher error
-		dataStatus = STATUS_INTERNAL_ERROR
-		ac.keystatus.Set(key, dataStatus)
+		ac.keystatus.Set(key, STATUS_INTERNAL_ERROR)
 		return
 	}
 	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
-	dataStatus = STATUS_DONE
-	ac.keystatus.Set(key, dataStatus)
+	ac.keystatus.Set(key, STATUS_DONE)
 }
