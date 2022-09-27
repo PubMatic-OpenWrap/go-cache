@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-//status is signal which helps to identify in which state the current process with a specific key is
-type status int
+//Status is signal which helps to identify in which state the current process with a specific key is
+type Status int
 type tstatus struct {
 	expirationTime time.Time
-	value          status
+	value          Status
 }
 
-//status for keys/process declared in constants
+//Status for keys/process declared in constants
 const (
-	STATUS_NOTPRESENT     status = iota //current key is not present in KeyMap
+	STATUS_NOTPRESENT     Status = iota //current key is not present in KeyMap
 	STATUS_INPROCESS                    // current key/process is already INPROCESS to fetch data from data source
 	STATUS_DONE                         //current key/process have DONE fetching data and updated in cache
 	STATUS_INTERNAL_ERROR               //current key/process recieved internal_error while fetching data
@@ -22,7 +22,7 @@ const (
 )
 
 type keyStatus struct {
-	keyMap    map[string]tstatus //status{INPROCESS,DONE,INVALID,NOPRESENT,INVALID_KEY}
+	keyMap    map[string]tstatus //Status{INPROCESS,DONE,INVALID,NOPRESENT,INVALID_KEY}
 	mu        *sync.RWMutex
 	purgeTime time.Duration
 }
@@ -43,30 +43,30 @@ func NewKeyStatus(purge_time time.Duration) *keyStatus {
 	}
 }
 
-//Set status/status with respective key in keyStatus
-func (ks *keyStatus) Set(key string, status status) {
+//Set Status/Status with respective key in keyStatus
+func (ks *keyStatus) Set(key string, Status Status) {
 
 	if len(key) > 0 {
 		ks.mu.Lock()
-		/* Setting Expiry time as current time --> (now + keyState.Purgetime) and Value for tstatus.value as Updated status*/
+		/* Setting Expiry time as current time --> (now + keyState.Purgetime) and Value for tstatus.value as Updated Status*/
 		ks.keyMap[key] = tstatus{expirationTime: time.Now().Add(ks.purgeTime),
-			value: status}
+			value: Status}
 		ks.mu.Unlock()
 	}
 }
 
-//Get status/status of respective key in keyStatus
-func (ks *keyStatus) Get(key string) status {
+//Get Status/Status of respective key in keyStatus
+func (ks *keyStatus) Get(key string) Status {
 	if len(key) == 0 {
 		return STATUS_INVALID_KEY
 	}
 	ks.mu.RLock()
-	status, found := ks.keyMap[key]
+	Status, found := ks.keyMap[key]
 	ks.mu.RUnlock()
 	if !found {
 		return STATUS_NOTPRESENT
 	}
-	return status.value
+	return Status.value
 }
 
 // To check if associated key is expired/alive
@@ -107,7 +107,7 @@ func NewAsyncCache(fetcher *fetcher, purgeTime time.Duration, expiryTime time.Du
 	}
 }
 
-func (ac *AsyncCache) AsyncGet(key string) (interface{}, status) {
+func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	//Fetching from cache
 	data, ok := ac.gCache.Get(key)
 	if ok {
@@ -115,7 +115,7 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, status) {
 	}
 	currStatus := ac.keystatus.Get(key)
 	if currStatus == STATUS_INPROCESS {
-		//data not present in cache and status INPROCESS
+		//data not present in cache and Status INPROCESS
 		return data, STATUS_INPROCESS
 	} else if currStatus == STATUS_INTERNAL_ERROR {
 		//returning error for internal error

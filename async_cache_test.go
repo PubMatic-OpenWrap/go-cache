@@ -19,20 +19,20 @@ func Test_keyStatus_Set(t *testing.T) {
 	}
 	type args struct {
 		key    string
-		status status
+		Status Status
 	}
 	tests := []struct {
 		name       string
 		fields     fields
 		args       args
-		wantStatus status
+		wantStatus Status
 	}{
 		{
 			name:   "With Valid key and state",
 			fields: fields(*NewKeyStatus(EXPIRATION_TIME)),
 			args: args{
 				key:    "prof_123",
-				status: STATUS_INPROCESS,
+				Status: STATUS_INPROCESS,
 			},
 			wantStatus: STATUS_INPROCESS,
 		},
@@ -41,7 +41,7 @@ func Test_keyStatus_Set(t *testing.T) {
 			fields: fields(*NewKeyStatus(EXPIRATION_TIME)),
 			args: args{
 				key:    "",
-				status: STATUS_INPROCESS,
+				Status: STATUS_INPROCESS,
 			},
 			wantStatus: STATUS_INVALID_KEY,
 		},
@@ -51,10 +51,10 @@ func Test_keyStatus_Set(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ks := NewKeyStatus(EXPIRATION_TIME)
 			t.Parallel()
-			ks.Set(tt.args.key, tt.args.status)
+			ks.Set(tt.args.key, tt.args.Status)
 			if ks.Get(tt.args.key) != tt.wantStatus {
 				t.Log(tt.fields.keyMap)
-				t.Errorf("KeyStatys.Set() sets status %v, want status %v", tt.args.status, tt.wantStatus)
+				t.Errorf("KeyStatys.Set() sets Status %v, want Status %v", tt.args.Status, tt.wantStatus)
 			}
 		})
 	}
@@ -69,7 +69,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		name string
 		KeyS keyStatus
 		args args
-		want status
+		want Status
 	}{
 		{
 			name: "With Valid key and state as DONE",
@@ -141,11 +141,11 @@ func testFillKeyCache() map[string]tstatus {
 }
 
 func Test_keyStatus_Purge(t *testing.T) {
-	// type KeyAndstatus = map[string]status
+	// type KeyAndstatus = map[string]Status
 	tests := []struct {
 		name   string
 		fields *keyStatus
-		want   map[string]status
+		want   map[string]Status
 	}{
 		{
 			name: "Purging with valid expired keys",
@@ -154,7 +154,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 				mu:        &sync.RWMutex{},
 				purgeTime: 25 * time.Millisecond,
 			},
-			want: map[string]status{
+			want: map[string]Status{
 				"prof_Alive2": STATUS_DONE,
 			},
 		},
@@ -165,7 +165,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 				mu:        &sync.RWMutex{},
 				purgeTime: 250 * time.Millisecond,
 			},
-			want: map[string]status{},
+			want: map[string]Status{},
 		},
 	}
 	for _, tt := range tests {
@@ -176,7 +176,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 				time.Sleep(1000 * time.Millisecond)
 			}
 			mapper := ks.keyMap
-			kV := make(map[string]status)
+			kV := make(map[string]Status)
 			for k, v := range mapper {
 				kV[k] = v.value
 			}
@@ -207,7 +207,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		name       string
 		args       args
 		want       interface{}
-		wantStatus status
+		wantStatus Status
 		as         AsyncCache
 	}{
 		{name: "Hitting first call request",
@@ -218,7 +218,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			wantStatus: STATUS_INPROCESS,
 			as:         *InitAsyncCache(),
 		},
-		{name: "getting data if data is already present in AsyncCache with status DONE",
+		{name: "getting data if data is already present in AsyncCache with Status DONE",
 			args: args{
 				key: "PROF_5890",
 			},
@@ -256,7 +256,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				return *ac
 			}(),
 		},
-		{name: "request with already INPROCESS status",
+		{name: "request with already INPROCESS Status",
 			args: args{
 				key: "PROF_5890",
 			},
