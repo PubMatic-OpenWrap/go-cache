@@ -8,24 +8,24 @@ const (
 	errInvalidKey = "type:[invalid_key] key:[%s]"
 )
 
-type callbackFunc func(key string) (interface{}, error)
+type Callback func(key string) (interface{}, error)
 
 type fetcher struct {
 	// "cb" stores keyPrefix Length and Static Callback w. r. t. KeyPrefix
-	cb        map[string]callbackFunc
+	cb        map[string]Callback
 	prefixLen int
 }
 
 //Initiazing Fetcher
 func NewFetcher(prefixLen int) *fetcher {
 	return &fetcher{
-		cb:        make(map[string]callbackFunc),
+		cb:        make(map[string]Callback),
 		prefixLen: prefixLen,
 	}
 }
 
 //Registering Fetcher with Each Callback Func w. r. t. keyPrefix
-func (f *fetcher) Register(keyPrefix string, cbf callbackFunc) bool {
+func (f *fetcher) Register(keyPrefix string, cbf Callback) bool {
 
 	//Case of InValid KeyPrefix
 	if len(keyPrefix) != f.prefixLen {

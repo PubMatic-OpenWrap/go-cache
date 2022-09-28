@@ -7,12 +7,12 @@ import (
 
 func Test_fetcher_Register(t *testing.T) {
 	type fields struct {
-		cb        map[string]callbackFunc
+		cb        map[string]Callback
 		prefixLen int
 	}
 	type args struct {
 		keyPrefix string
-		cbf       callbackFunc
+		cbf       Callback
 	}
 	tests := []struct {
 		name   string
@@ -63,7 +63,7 @@ func Test_fetcher_Register(t *testing.T) {
 
 func Test_fetcher_Execute(t *testing.T) {
 	type fields struct {
-		cb        map[string]callbackFunc
+		cb        map[string]Callback
 		prefixLen int
 	}
 	type args struct {
@@ -79,7 +79,7 @@ func Test_fetcher_Execute(t *testing.T) {
 		{
 			name: "Invalid Key",
 			fields: fields{
-				cb: map[string]callbackFunc{
+				cb: map[string]Callback{
 					"AAG00": nil,
 				},
 				prefixLen: 5,
@@ -93,7 +93,7 @@ func Test_fetcher_Execute(t *testing.T) {
 		{
 			name: "Unexisting Key Execution",
 			fields: fields{
-				cb: map[string]callbackFunc{
+				cb: map[string]Callback{
 					"AAG00": nil,
 					"AAA00": nil,
 					"AAB00": nil,
@@ -109,7 +109,7 @@ func Test_fetcher_Execute(t *testing.T) {
 		{
 			name: "Valid Key Execution",
 			fields: fields{
-				cb: map[string]callbackFunc{
+				cb: map[string]Callback{
 					"AAG00": CbGetAdUnitConfig,
 					"AAA00": nil,
 					"AAB00": nil,
