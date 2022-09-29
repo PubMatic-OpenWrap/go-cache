@@ -50,7 +50,7 @@ func Test_fetcher_Register(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &fetcher{
+			f := &Fetcher{
 				cb:        tt.fields.cb,
 				prefixLen: tt.fields.prefixLen,
 			}
@@ -126,7 +126,7 @@ func Test_fetcher_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &fetcher{
+			f := &Fetcher{
 				cb:        tt.fields.cb,
 				prefixLen: tt.fields.prefixLen,
 			}

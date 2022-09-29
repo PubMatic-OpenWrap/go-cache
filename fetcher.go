@@ -10,22 +10,22 @@ const (
 
 type Callback func(key string) (interface{}, error)
 
-type fetcher struct {
+type Fetcher struct {
 	// "cb" stores keyPrefix Length and Static Callback w. r. t. KeyPrefix
 	cb        map[string]Callback
 	prefixLen int
 }
 
 //Initiazing Fetcher
-func NewFetcher(prefixLen int) *fetcher {
-	return &fetcher{
+func NewFetcher(prefixLen int) *Fetcher {
+	return &Fetcher{
 		cb:        make(map[string]Callback),
 		prefixLen: prefixLen,
 	}
 }
 
 //Registering Fetcher with Each Callback Func w. r. t. keyPrefix
-func (f *fetcher) Register(keyPrefix string, cbf Callback) bool {
+func (f *Fetcher) Register(keyPrefix string, cbf Callback) bool {
 
 	//Case of InValid KeyPrefix
 	if len(keyPrefix) != f.prefixLen {
@@ -36,7 +36,7 @@ func (f *fetcher) Register(keyPrefix string, cbf Callback) bool {
 	return true
 }
 
-func (f *fetcher) Execute(key string) (interface{}, error) {
+func (f *Fetcher) Execute(key string) (interface{}, error) {
 
 	//Case of InValid Key
 	if len(key) < f.prefixLen {
