@@ -140,3 +140,11 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
 	ac.keystatus.Set(key, STATUS_DONE)
 }
+
+func (ac *AsyncCache) Set(key string, data interface{}) {
+	ac.gCache.Set(key, data, ac.gCache.defaultExpiration)
+}
+
+func (ac *AsyncCache) SetWithExpiry(key string, data interface{}, t time.Duration) {
+	ac.gCache.Set(key, data, t)
+}

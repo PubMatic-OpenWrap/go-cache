@@ -308,3 +308,61 @@ func getProf(key string) (interface{}, error) {
 func getConf(key string) (interface{}, error) {
 	return nil, errors.New("err:getting configs")
 }
+
+func TestAsyncCache_SetInCache(t *testing.T) {
+
+	type args struct {
+		key  string
+		data interface{}
+	}
+	tests := []struct {
+		name string
+		ac   AsyncCache
+		args args
+	}{
+		{
+			name: "Setting data in ac.gCache",
+			ac:   *InitAsyncCache(),
+			args: args{
+				key:  "PROF_541",
+				data: "dummy 123",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ac1 := tt.ac
+			ac1.Set(tt.args.key, tt.args.data)
+		})
+	}
+}
+
+func TestAsyncCache_SetWithExpiry(t *testing.T) {
+
+	type args struct {
+		key  string
+		data interface{}
+		t    time.Duration
+	}
+	tests := []struct {
+		name string
+		ac   AsyncCache
+		args args
+	}{
+		{
+			name: "Setting data with expiry in asyncache.gCache",
+			args: args{
+				key:  "PROF_2022",
+				data: "DummyData",
+				t:    500 * time.Millisecond,
+			},
+			ac: *InitAsyncCache(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ac1 := tt.ac
+			ac1.SetWithExpiry(tt.args.key, tt.args.data, tt.args.t)
+		})
+	}
+}
