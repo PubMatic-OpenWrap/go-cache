@@ -30,7 +30,7 @@ type keyStatus struct {
 //Async Cache
 type AsyncCache struct {
 	gCache    *Cache
-	fetcher   *Fetcher
+	Fetcher   *Fetcher
 	keystatus *keyStatus
 }
 
@@ -99,9 +99,9 @@ func (ks *keyStatus) purge() {
 }
 
 //Init NewAsyncCache
-func NewAsyncCache(fetcher *Fetcher, purgeTime time.Duration, expiryTime time.Duration) *AsyncCache {
+func NewAsyncCache(Fetcher *Fetcher, purgeTime time.Duration, expiryTime time.Duration) *AsyncCache {
 	return &AsyncCache{
-		fetcher:   fetcher,
+		Fetcher:   Fetcher,
 		keystatus: NewKeyStatus(purgeTime),
 		gCache:    New(expiryTime, purgeTime),
 	}
@@ -130,7 +130,7 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 }
 
 func (ac *AsyncCache) asyncUpdate(key string) {
-	fetchedData, err := ac.fetcher.Execute(key)
+	fetchedData, err := ac.Fetcher.Execute(key)
 	// fetching and returning data
 	if err != nil {
 		// Response Error from DB/Fetcher error
