@@ -29,9 +29,10 @@ type keyStatus struct {
 
 //Async Cache
 type AsyncCache struct {
-	gCache    *Cache
-	Fetcher   *Fetcher
-	keystatus *keyStatus
+	gCache      *Cache
+	Fetcher     *Fetcher
+	keystatus   *keyStatus
+	errorParser func(key string, err error) error
 }
 
 //To Create A New keyStatus
@@ -88,6 +89,14 @@ func (ks *keyStatus) deleteExpiredKeys() {
 	}
 }
 
+func (ks *keyStatus) lock() {
+	ks.mu.RLock()
+}
+
+func (ks *keyStatus) unlock() {
+	ks.mu.RUnlock()
+}
+
 //time-based triggering for purging based on keyStatus.tstatus.purgeTime
 func (ks *keyStatus) purge() {
 	ticker := time.NewTicker(ks.purgeTime)
@@ -99,11 +108,12 @@ func (ks *keyStatus) purge() {
 }
 
 //Init NewAsyncCache
-func NewAsyncCache(Fetcher *Fetcher, purgeTime time.Duration, expiryTime time.Duration) *AsyncCache {
+func NewAsyncCache(Fetcher *Fetcher, purgeTime time.Duration, expiryTime time.Duration, errorFuncDefination func(key string, err error) error) *AsyncCache {
 	return &AsyncCache{
-		Fetcher:   Fetcher,
-		keystatus: NewKeyStatus(purgeTime),
-		gCache:    New(expiryTime, purgeTime),
+		Fetcher:     Fetcher,
+		keystatus:   NewKeyStatus(purgeTime),
+		gCache:      New(expiryTime, purgeTime),
+		errorParser: errorFuncDefination,
 	}
 }
 
@@ -113,16 +123,16 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	if ok {
 		return data, STATUS_DONE
 	}
-	currStatus := ac.keystatus.Get(key)
+	ac.keystatus.lock()
+	currStatus := ac.keystatus.get(key)
 	if currStatus == STATUS_INPROCESS {
 		//data not present in cache and Status INPROCESS
+		ac.keystatus.unlock()
 		return data, STATUS_INPROCESS
-	} else if currStatus == STATUS_INTERNAL_ERROR {
-		//returning error for internal error
-		return data, STATUS_INTERNAL_ERROR
 	}
 	//New Call for the key, updating KeyStatus for key to Status INPROCESS
-	ac.keystatus.Set(key, STATUS_INPROCESS)
+	ac.keystatus.set(key, STATUS_INPROCESS)
+	ac.keystatus.unlock()
 	//asyncCall to DB/dataSource
 	go ac.asyncUpdate(key)
 	//returning data and cache/keystatus
@@ -135,6 +145,7 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 	if err != nil {
 		// Response Error from DB/Fetcher error
 		ac.keystatus.Set(key, STATUS_INTERNAL_ERROR)
+		ac.errorParser(key, err)
 		return
 	}
 	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
@@ -147,4 +158,23 @@ func (ac *AsyncCache) Set(key string, data interface{}) {
 
 func (ac *AsyncCache) SetWithExpiry(key string, data interface{}, t time.Duration) {
 	ac.gCache.Set(key, data, t)
+}
+
+func (ks *keyStatus) get(key string) Status {
+	if len(key) == 0 {
+		return STATUS_INVALID_KEY
+	}
+	Status, found := ks.keyMap[key]
+	if !found {
+		return STATUS_NOTPRESENT
+	}
+	return Status.value
+}
+
+func (ks *keyStatus) set(key string, Status Status) {
+	if len(key) > 0 {
+		/* Setting Expiry time as current time --> (now + keyState.Purgetime) and Value for tstatus.value as Updated Status*/
+		ks.keyMap[key] = tstatus{expirationTime: time.Now().Add(ks.purgeTime),
+			value: Status}
+	}
 }

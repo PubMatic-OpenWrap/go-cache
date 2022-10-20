@@ -2,6 +2,7 @@ package cache
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -236,7 +237,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				key: "CONF_5890",
 			},
 			want:       nil,
-			wantStatus: STATUS_INTERNAL_ERROR,
+			wantStatus: STATUS_INPROCESS,
 			as: func() AsyncCache {
 				as1 := InitAsyncCache()
 				return *as1
@@ -252,7 +253,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				ac := NewAsyncCache(f, 8*time.Second, 0)
+				ac := NewAsyncCache(f, 8*time.Second, 0, ErrorHandler)
 				return *ac
 			}(),
 		},
@@ -266,7 +267,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				ac := NewAsyncCache(f, 8*time.Second, 0)
+				ac := NewAsyncCache(f, 8*time.Second, 0, ErrorHandler)
 				ac.keystatus.Set("PROF_5890", STATUS_INPROCESS)
 				return *ac
 			}(),
@@ -277,7 +278,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ac := tt.as
 			//we will be calling AsyncGet to explicitly set the data with key
-			if tt.name == "Demonstrating asyncUpdate call" || tt.name == "With an Invalid datasource response with internal error " {
+			if tt.name == "Demonstrating asyncUpdate call" {
 				ac.AsyncGet(tt.args.key)
 			}
 			time.Sleep(1 * time.Millisecond)
@@ -292,12 +293,15 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		})
 	}
 }
-
+func ErrorHandler(key string, err error) error {
+	fmt.Print("Error for ", key, "is ", err)
+	return nil
+}
 func InitAsyncCache() *AsyncCache {
 	f := NewFetcher(4)
 	f.Register("PROF", getProf)
 	f.Register("CONF", getConf)
-	ac := NewAsyncCache(f, 8*time.Second, 1000*time.Millisecond)
+	ac := NewAsyncCache(f, 8*time.Second, 1000*time.Millisecond, ErrorHandler)
 	return ac
 }
 
