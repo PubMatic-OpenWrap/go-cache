@@ -90,11 +90,11 @@ func (ks *keyStatus) deleteExpiredKeys() {
 }
 
 func (ks *keyStatus) lock() {
-	ks.mu.RLock()
+	ks.mu.Lock()
 }
 
 func (ks *keyStatus) unlock() {
-	ks.mu.RUnlock()
+	ks.mu.Unlock()
 }
 
 //time-based triggering for purging based on keyStatus.tstatus.purgeTime
