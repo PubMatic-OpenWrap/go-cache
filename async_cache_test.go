@@ -253,7 +253,13 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				ac := NewAsyncCache(f, 8*time.Second, 0, ErrorHandler)
+				config := AcacheConfig{
+					Fetcher:             f,
+					purgeTime:           8 * time.Second,
+					expiryTime:          0,
+					errorFuncDefination: ErrorHandler,
+				}
+				ac := NewAsyncCache(config)
 				return *ac
 			}(),
 		},
@@ -267,7 +273,13 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				ac := NewAsyncCache(f, 8*time.Second, 0, ErrorHandler)
+				config := AcacheConfig{
+					Fetcher:             f,
+					purgeTime:           8 * time.Second,
+					expiryTime:          0,
+					errorFuncDefination: ErrorHandler,
+				}
+				ac := NewAsyncCache(config)
 				ac.keystatus.Set("PROF_5890", STATUS_INPROCESS)
 				return *ac
 			}(),
@@ -293,15 +305,20 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		})
 	}
 }
-func ErrorHandler(key string, err error) error {
+func ErrorHandler(key string, err error) {
 	fmt.Print("Error for ", key, "is ", err)
-	return nil
 }
 func InitAsyncCache() *AsyncCache {
 	f := NewFetcher(4)
 	f.Register("PROF", getProf)
 	f.Register("CONF", getConf)
-	ac := NewAsyncCache(f, 8*time.Second, 1000*time.Millisecond, ErrorHandler)
+	config := AcacheConfig{
+		Fetcher:             f,
+		purgeTime:           8 * time.Second,
+		expiryTime:          1000 * time.Millisecond,
+		errorFuncDefination: nil,
+	}
+	ac := NewAsyncCache(config)
 	return ac
 }
 

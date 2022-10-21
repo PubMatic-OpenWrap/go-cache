@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"log"
 	"sync"
 	"time"
 )
@@ -32,7 +33,14 @@ type AsyncCache struct {
 	gCache      *Cache
 	Fetcher     *Fetcher
 	keystatus   *keyStatus
-	errorParser func(key string, err error) error
+	errorParser func(key string, err error)
+}
+
+type AcacheConfig struct {
+	Fetcher             *Fetcher
+	purgeTime           time.Duration
+	expiryTime          time.Duration
+	errorFuncDefination func(key string, err error)
 }
 
 //To Create A New keyStatus
@@ -41,6 +49,24 @@ func NewKeyStatus(purge_time time.Duration) *keyStatus {
 		keyMap:    make(map[string]tstatus),
 		mu:        &sync.RWMutex{},
 		purgeTime: purge_time,
+	}
+}
+func DefaultErrorHandler(key string, err error) {
+	log.Println("ERROR: _Key:", key, "ErrorInformation: ", err)
+}
+
+//Init NewAsyncCache
+func NewAsyncCache(aConfig AcacheConfig) *AsyncCache {
+	errorHandlerfunc := aConfig.errorFuncDefination
+	//check default behaviour
+	if errorHandlerfunc == nil {
+		errorHandlerfunc = DefaultErrorHandler
+	}
+	return &AsyncCache{
+		Fetcher:     aConfig.Fetcher,
+		keystatus:   NewKeyStatus(aConfig.purgeTime),
+		gCache:      New(aConfig.expiryTime, aConfig.purgeTime),
+		errorParser: errorHandlerfunc,
 	}
 }
 
@@ -107,16 +133,6 @@ func (ks *keyStatus) purge() {
 	}()
 }
 
-//Init NewAsyncCache
-func NewAsyncCache(Fetcher *Fetcher, purgeTime time.Duration, expiryTime time.Duration, errorFuncDefination func(key string, err error) error) *AsyncCache {
-	return &AsyncCache{
-		Fetcher:     Fetcher,
-		keystatus:   NewKeyStatus(purgeTime),
-		gCache:      New(expiryTime, purgeTime),
-		errorParser: errorFuncDefination,
-	}
-}
-
 func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	//Fetching from cache
 	data, ok := ac.gCache.Get(key)
@@ -130,6 +146,7 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 		ac.keystatus.unlock()
 		return data, STATUS_INPROCESS
 	}
+
 	//New Call for the key, updating KeyStatus for key to Status INPROCESS
 	ac.keystatus.set(key, STATUS_INPROCESS)
 	ac.keystatus.unlock()
