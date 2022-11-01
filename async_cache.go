@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -36,11 +37,11 @@ type AsyncCache struct {
 	errorParser func(key string, err error)
 }
 
-type AcacheConfig struct {
+type Config struct {
 	Fetcher             *Fetcher
-	purgeTime           time.Duration
-	expiryTime          time.Duration
-	errorFuncDefination func(key string, err error)
+	PurgeTime           time.Duration
+	ExpiryTime          time.Duration
+	ErrorFuncDefination func(key string, err error)
 }
 
 //To Create A New keyStatus
@@ -54,19 +55,33 @@ func NewKeyStatus(purge_time time.Duration) *keyStatus {
 func DefaultErrorHandler(key string, err error) {
 	log.Println("ERROR: _Key:", key, "ErrorInformation: ", err)
 }
+func validateConfigs(aConf *Config) error {
+	//checking if not nil
+	if aConf != nil {
+		//setting values no defualt values provided
+		//purgeTime & expirtytime will be validated in code (should be non-negative)
+		if aConf.Fetcher == nil {
+			return errors.New("Fetcher Not Initialized")
+		}
+		if aConf.ErrorFuncDefination == nil {
+			aConf.ErrorFuncDefination = DefaultErrorHandler
+		}
+	}
+	return nil
+}
 
 //Init NewAsyncCache
-func NewAsyncCache(aConfig AcacheConfig) *AsyncCache {
-	errorHandlerfunc := aConfig.errorFuncDefination
-	//check default behaviour
-	if errorHandlerfunc == nil {
-		errorHandlerfunc = DefaultErrorHandler
+func NewAsyncCache(aConfig *Config) *AsyncCache {
+	err := validateConfigs(aConfig)
+	// checks for valid Fecther and ErrorHandlerFunction and if not, returns nil
+	if err != nil {
+		return nil
 	}
 	return &AsyncCache{
 		Fetcher:     aConfig.Fetcher,
-		keystatus:   NewKeyStatus(aConfig.purgeTime),
-		gCache:      New(aConfig.expiryTime, aConfig.purgeTime),
-		errorParser: errorHandlerfunc,
+		keystatus:   NewKeyStatus(aConfig.PurgeTime),
+		gCache:      New(aConfig.ExpiryTime, aConfig.PurgeTime),
+		errorParser: aConfig.ErrorFuncDefination,
 	}
 }
 
@@ -125,6 +140,10 @@ func (ks *keyStatus) unlock() {
 
 //time-based triggering for purging based on keyStatus.tstatus.purgeTime
 func (ks *keyStatus) purge() {
+	//validating purgeTime to be non-negative and Zero
+	if ks.purgeTime <= 0 {
+		return
+	}
 	ticker := time.NewTicker(ks.purgeTime)
 	go func() {
 		for range ticker.C {

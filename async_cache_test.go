@@ -253,13 +253,13 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				config := AcacheConfig{
+				config := Config{
 					Fetcher:             f,
-					purgeTime:           8 * time.Second,
-					expiryTime:          0,
-					errorFuncDefination: ErrorHandler,
+					PurgeTime:           8 * time.Second,
+					ExpiryTime:          0,
+					ErrorFuncDefination: ErrorHandler,
 				}
-				ac := NewAsyncCache(config)
+				ac := NewAsyncCache(&config)
 				return *ac
 			}(),
 		},
@@ -273,13 +273,13 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				config := AcacheConfig{
+				config := Config{
 					Fetcher:             f,
-					purgeTime:           8 * time.Second,
-					expiryTime:          0,
-					errorFuncDefination: ErrorHandler,
+					PurgeTime:           8 * time.Second,
+					ExpiryTime:          0,
+					ErrorFuncDefination: ErrorHandler,
 				}
-				ac := NewAsyncCache(config)
+				ac := NewAsyncCache(&config)
 				ac.keystatus.Set("PROF_5890", STATUS_INPROCESS)
 				return *ac
 			}(),
@@ -312,13 +312,13 @@ func InitAsyncCache() *AsyncCache {
 	f := NewFetcher(4)
 	f.Register("PROF", getProf)
 	f.Register("CONF", getConf)
-	config := AcacheConfig{
+	config := Config{
 		Fetcher:             f,
-		purgeTime:           8 * time.Second,
-		expiryTime:          1000 * time.Millisecond,
-		errorFuncDefination: nil,
+		PurgeTime:           8 * time.Second,
+		ExpiryTime:          1000 * time.Millisecond,
+		ErrorFuncDefination: nil,
 	}
-	ac := NewAsyncCache(config)
+	ac := NewAsyncCache(&config)
 	return ac
 }
 
@@ -384,6 +384,37 @@ func TestAsyncCache_SetWithExpiry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ac1 := tt.ac
 			ac1.SetWithExpiry(tt.args.key, tt.args.data, tt.args.t)
+		})
+	}
+}
+
+func TestNewAsyncCache(t *testing.T) {
+	type args struct {
+		aConfig *Config
+	}
+	tests := []struct {
+		name string
+		args args
+		want *AsyncCache
+	}{
+		{
+			name: "Check for Validation",
+			args: args{
+				aConfig: &Config{
+					Fetcher:             nil,
+					PurgeTime:           0,
+					ExpiryTime:          0,
+					ErrorFuncDefination: nil,
+				},
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewAsyncCache(tt.args.aConfig); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewAsyncCache() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
