@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"errors"
 	"log"
 	"sync"
 	"time"
@@ -31,10 +30,10 @@ type keyStatus struct {
 
 //Async Cache
 type AsyncCache struct {
-	gCache      *Cache
-	Fetcher     *Fetcher
-	keystatus   *keyStatus
-	errorParser func(key string, err error)
+	gCache    *Cache
+	Fetcher   *Fetcher
+	keystatus *keyStatus
+	errorFunc func(key string, err error)
 }
 
 type Config struct {
@@ -44,44 +43,45 @@ type Config struct {
 	ErrorFuncDefination func(key string, err error)
 }
 
-//To Create A New keyStatus
-func NewKeyStatus(purge_time time.Duration) *keyStatus {
-	return &keyStatus{
+func newKeyStatusWithJanitor(purgeTime time.Duration) *keyStatus {
+	Ks := &keyStatus{
 		keyMap:    make(map[string]tstatus),
 		mu:        &sync.RWMutex{},
-		purgeTime: purge_time,
+		purgeTime: purgeTime,
 	}
+	Ks.purge()
+	return Ks
 }
+
+//To Create A New keyStatus
+func NewKeyStatus(purge_time time.Duration) *keyStatus {
+	//if purge time is less than or zero, skipping purge for keyStatus
+	return newKeyStatusWithJanitor(purge_time)
+}
+
+//default ErrorHandler Function
 func DefaultErrorHandler(key string, err error) {
 	log.Println("ERROR: _Key:", key, "ErrorInformation: ", err)
-}
-func validateConfigs(aConf *Config) error {
-	//checking if not nil
-	if aConf != nil {
-		//setting values no defualt values provided
-		//purgeTime & expirtytime will be validated in code (should be non-negative)
-		if aConf.Fetcher == nil {
-			return errors.New("Fetcher Not Initialized")
-		}
-		if aConf.ErrorFuncDefination == nil {
-			aConf.ErrorFuncDefination = DefaultErrorHandler
-		}
-	}
-	return nil
 }
 
 //Init NewAsyncCache
 func NewAsyncCache(aConfig *Config) *AsyncCache {
-	err := validateConfigs(aConfig)
-	// checks for valid Fecther and ErrorHandlerFunction and if not, returns nil
-	if err != nil {
-		return nil
+	//validating Config Passed for AsyncCache Initialization
+	if aConfig != nil {
+		//setting values defualt, when no values provided
+		//purgeTime & expirtytime will be validated in code (should be non-negative)
+		if aConfig.Fetcher == nil {
+			aConfig.Fetcher = NewFetcher(0)
+		}
+		if aConfig.ErrorFuncDefination == nil {
+			aConfig.ErrorFuncDefination = DefaultErrorHandler
+		}
 	}
 	return &AsyncCache{
-		Fetcher:     aConfig.Fetcher,
-		keystatus:   NewKeyStatus(aConfig.PurgeTime),
-		gCache:      New(aConfig.ExpiryTime, aConfig.PurgeTime),
-		errorParser: aConfig.ErrorFuncDefination,
+		Fetcher:   aConfig.Fetcher,
+		keystatus: NewKeyStatus(aConfig.PurgeTime),
+		gCache:    New(aConfig.ExpiryTime, aConfig.PurgeTime),
+		errorFunc: aConfig.ErrorFuncDefination,
 	}
 }
 
@@ -181,7 +181,7 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 	if err != nil {
 		// Response Error from DB/Fetcher error
 		ac.keystatus.Set(key, STATUS_INTERNAL_ERROR)
-		ac.errorParser(key, err)
+		ac.errorFunc(key, err)
 		return
 	}
 	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
@@ -190,10 +190,16 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 
 func (ac *AsyncCache) Set(key string, data interface{}) {
 	ac.gCache.Set(key, data, ac.gCache.defaultExpiration)
+	ac.keystatus.Set(key, STATUS_DONE) //data already present
 }
 
 func (ac *AsyncCache) SetWithExpiry(key string, data interface{}, t time.Duration) {
 	ac.gCache.Set(key, data, t)
+	ac.keystatus.Set(key, STATUS_DONE) //data is not present
+}
+
+func (ac *AsyncCache) GetFromCache(key string) (interface{}, bool) {
+	return ac.gCache.Get(key)
 }
 
 func (ks *keyStatus) get(key string) Status {

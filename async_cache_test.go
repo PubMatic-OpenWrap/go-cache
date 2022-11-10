@@ -407,12 +407,12 @@ func TestNewAsyncCache(t *testing.T) {
 					ErrorFuncDefination: nil,
 				},
 			},
-			want: nil,
+			want: &AsyncCache{},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewAsyncCache(tt.args.aConfig); !reflect.DeepEqual(got, tt.want) {
+			if got := NewAsyncCache(tt.args.aConfig); got == nil || reflect.TypeOf(got) != reflect.TypeOf(tt.want) {
 				t.Errorf("NewAsyncCache() = %v, want %v", got, tt.want)
 			}
 		})
