@@ -227,7 +227,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			wantStatus: STATUS_DONE,
 			as: func() AsyncCache {
 				as1 := InitAsyncCache()
-				as1.gCache.Set("PROF_5890", "profile_5890_201", as1.keystatus.purgeTime)
+				as1.Set("PROF_5890", "profile_5890_201", as1.keystatus.purgeTime)
 				as1.keystatus.Set("PROF_5890", STATUS_DONE)
 				return *as1
 			}(),
@@ -253,13 +253,13 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				config := AcacheConfig{
+				config := Config{
 					Fetcher:             f,
-					purgeTime:           8 * time.Second,
-					expiryTime:          0,
-					errorFuncDefination: ErrorHandler,
+					PurgeTime:           8 * time.Second,
+					ExpiryTime:          0,
+					ErrorFuncDefination: ErrorHandler,
 				}
-				ac := NewAsyncCache(config)
+				ac := NewAsyncCache(&config)
 				return *ac
 			}(),
 		},
@@ -273,13 +273,13 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				f := NewFetcher(4)
 				f.Register("PROF", getProf)
 				f.Register("CONF", getConf)
-				config := AcacheConfig{
+				config := Config{
 					Fetcher:             f,
-					purgeTime:           8 * time.Second,
-					expiryTime:          0,
-					errorFuncDefination: ErrorHandler,
+					PurgeTime:           8 * time.Second,
+					ExpiryTime:          0,
+					ErrorFuncDefination: ErrorHandler,
 				}
-				ac := NewAsyncCache(config)
+				ac := NewAsyncCache(&config)
 				ac.keystatus.Set("PROF_5890", STATUS_INPROCESS)
 				return *ac
 			}(),
@@ -312,13 +312,13 @@ func InitAsyncCache() *AsyncCache {
 	f := NewFetcher(4)
 	f.Register("PROF", getProf)
 	f.Register("CONF", getConf)
-	config := AcacheConfig{
+	config := Config{
 		Fetcher:             f,
-		purgeTime:           8 * time.Second,
-		expiryTime:          1000 * time.Millisecond,
-		errorFuncDefination: nil,
+		PurgeTime:           8 * time.Second,
+		ExpiryTime:          1000 * time.Millisecond,
+		ErrorFuncDefination: nil,
 	}
-	ac := NewAsyncCache(config)
+	ac := NewAsyncCache(&config)
 	return ac
 }
 
@@ -342,7 +342,7 @@ func TestAsyncCache_SetInCache(t *testing.T) {
 		args args
 	}{
 		{
-			name: "Setting data in ac.gCache",
+			name: "Setting data in ac.Cache",
 			ac:   *InitAsyncCache(),
 			args: args{
 				key:  "PROF_541",
@@ -353,7 +353,12 @@ func TestAsyncCache_SetInCache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ac1 := tt.ac
-			ac1.Set(tt.args.key, tt.args.data)
+			ac1.Set(tt.args.key, tt.args.data, 0)
+			data, ok := ac1.Get(tt.args.key)
+			if !ok {
+				t.Errorf("data found %v", data)
+			}
+
 		})
 	}
 }
@@ -371,7 +376,7 @@ func TestAsyncCache_SetWithExpiry(t *testing.T) {
 		args args
 	}{
 		{
-			name: "Setting data with expiry in asyncache.gCache",
+			name: "Setting data with expiry in asyncache.Cache",
 			args: args{
 				key:  "PROF_2022",
 				data: "DummyData",
@@ -383,7 +388,43 @@ func TestAsyncCache_SetWithExpiry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ac1 := tt.ac
-			ac1.SetWithExpiry(tt.args.key, tt.args.data, tt.args.t)
+			ac1.Set(tt.args.key, tt.args.data, tt.args.t)
+			data, ok := ac1.Get(tt.args.key)
+			if !ok {
+				t.Errorf("data found %v", data)
+			}
+
+		})
+	}
+}
+
+func TestNewAsyncCache(t *testing.T) {
+	type args struct {
+		aConfig *Config
+	}
+	tests := []struct {
+		name string
+		args args
+		want *AsyncCache
+	}{
+		{
+			name: "Check for Validation",
+			args: args{
+				aConfig: &Config{
+					Fetcher:             nil,
+					PurgeTime:           0,
+					ExpiryTime:          0,
+					ErrorFuncDefination: nil,
+				},
+			},
+			want: &AsyncCache{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewAsyncCache(tt.args.aConfig); got == nil || reflect.TypeOf(got) != reflect.TypeOf(tt.want) {
+				t.Errorf("NewAsyncCache() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

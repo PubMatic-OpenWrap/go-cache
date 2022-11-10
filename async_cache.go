@@ -30,43 +30,54 @@ type keyStatus struct {
 
 //Async Cache
 type AsyncCache struct {
-	gCache      *Cache
-	Fetcher     *Fetcher
-	keystatus   *keyStatus
-	errorParser func(key string, err error)
+	*Cache
+	Fetcher   *Fetcher
+	keystatus *keyStatus
+	errorFunc func(key string, err error)
 }
 
-type AcacheConfig struct {
+type Config struct {
 	Fetcher             *Fetcher
-	purgeTime           time.Duration
-	expiryTime          time.Duration
-	errorFuncDefination func(key string, err error)
+	PurgeTime           time.Duration
+	ExpiryTime          time.Duration
+	ErrorFuncDefination func(key string, err error)
 }
 
 //To Create A New keyStatus
 func NewKeyStatus(purge_time time.Duration) *keyStatus {
-	return &keyStatus{
+	//if purge time is less than or zero, skipping purge for keyStatus
+	ks := &keyStatus{
 		keyMap:    make(map[string]tstatus),
 		mu:        &sync.RWMutex{},
 		purgeTime: purge_time,
 	}
+	ks.purge()
+	return ks
 }
+
+//default ErrorHandler Function
 func DefaultErrorHandler(key string, err error) {
 	log.Println("ERROR: _Key:", key, "ErrorInformation: ", err)
 }
 
 //Init NewAsyncCache
-func NewAsyncCache(aConfig AcacheConfig) *AsyncCache {
-	errorHandlerfunc := aConfig.errorFuncDefination
-	//check default behaviour
-	if errorHandlerfunc == nil {
-		errorHandlerfunc = DefaultErrorHandler
+func NewAsyncCache(aConfig *Config) *AsyncCache {
+	//validating Config Passed for AsyncCache Initialization
+	if aConfig != nil {
+		//setting values defualt, when no values provided
+		//purgeTime & expirtytime will be validated in code (should be non-negative)
+		if aConfig.Fetcher == nil {
+			aConfig.Fetcher = NewFetcher(0)
+		}
+		if aConfig.ErrorFuncDefination == nil {
+			aConfig.ErrorFuncDefination = DefaultErrorHandler
+		}
 	}
 	return &AsyncCache{
-		Fetcher:     aConfig.Fetcher,
-		keystatus:   NewKeyStatus(aConfig.purgeTime),
-		gCache:      New(aConfig.expiryTime, aConfig.purgeTime),
-		errorParser: errorHandlerfunc,
+		Fetcher:   aConfig.Fetcher,
+		keystatus: NewKeyStatus(aConfig.PurgeTime),
+		Cache:     New(aConfig.ExpiryTime, aConfig.PurgeTime),
+		errorFunc: aConfig.ErrorFuncDefination,
 	}
 }
 
@@ -125,6 +136,10 @@ func (ks *keyStatus) unlock() {
 
 //time-based triggering for purging based on keyStatus.tstatus.purgeTime
 func (ks *keyStatus) purge() {
+	//validating purgeTime to be non-negative and Zero
+	if ks.purgeTime <= 0 {
+		return
+	}
 	ticker := time.NewTicker(ks.purgeTime)
 	go func() {
 		for range ticker.C {
@@ -135,7 +150,7 @@ func (ks *keyStatus) purge() {
 
 func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	//Fetching from cache
-	data, ok := ac.gCache.Get(key)
+	data, ok := ac.Get(key)
 	if ok {
 		return data, STATUS_DONE
 	}
@@ -162,19 +177,11 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 	if err != nil {
 		// Response Error from DB/Fetcher error
 		ac.keystatus.Set(key, STATUS_INTERNAL_ERROR)
-		ac.errorParser(key, err)
+		ac.errorFunc(key, err)
 		return
 	}
-	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
+	ac.Set(key, fetchedData, 0)
 	ac.keystatus.Set(key, STATUS_DONE)
-}
-
-func (ac *AsyncCache) Set(key string, data interface{}) {
-	ac.gCache.Set(key, data, ac.gCache.defaultExpiration)
-}
-
-func (ac *AsyncCache) SetWithExpiry(key string, data interface{}, t time.Duration) {
-	ac.gCache.Set(key, data, t)
 }
 
 func (ks *keyStatus) get(key string) Status {
