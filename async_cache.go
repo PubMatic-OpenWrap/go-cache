@@ -43,20 +43,16 @@ type Config struct {
 	ErrorFuncDefination func(key string, err error)
 }
 
-func newKeyStatusWithJanitor(purgeTime time.Duration) *keyStatus {
-	Ks := &keyStatus{
-		keyMap:    make(map[string]tstatus),
-		mu:        &sync.RWMutex{},
-		purgeTime: purgeTime,
-	}
-	Ks.purge()
-	return Ks
-}
-
 //To Create A New keyStatus
 func NewKeyStatus(purge_time time.Duration) *keyStatus {
 	//if purge time is less than or zero, skipping purge for keyStatus
-	return newKeyStatusWithJanitor(purge_time)
+	ks := &keyStatus{
+		keyMap:    make(map[string]tstatus),
+		mu:        &sync.RWMutex{},
+		purgeTime: purge_time,
+	}
+	ks.purge()
+	return ks
 }
 
 //default ErrorHandler Function
