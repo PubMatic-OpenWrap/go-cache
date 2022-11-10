@@ -30,7 +30,7 @@ type keyStatus struct {
 
 //Async Cache
 type AsyncCache struct {
-	gCache    *Cache
+	*Cache
 	Fetcher   *Fetcher
 	keystatus *keyStatus
 	errorFunc func(key string, err error)
@@ -76,7 +76,7 @@ func NewAsyncCache(aConfig *Config) *AsyncCache {
 	return &AsyncCache{
 		Fetcher:   aConfig.Fetcher,
 		keystatus: NewKeyStatus(aConfig.PurgeTime),
-		gCache:    New(aConfig.ExpiryTime, aConfig.PurgeTime),
+		Cache:     New(aConfig.ExpiryTime, aConfig.PurgeTime),
 		errorFunc: aConfig.ErrorFuncDefination,
 	}
 }
@@ -150,7 +150,7 @@ func (ks *keyStatus) purge() {
 
 func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	//Fetching from cache
-	data, ok := ac.gCache.Get(key)
+	data, ok := ac.Get(key)
 	if ok {
 		return data, STATUS_DONE
 	}
@@ -180,22 +180,8 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 		ac.errorFunc(key, err)
 		return
 	}
-	ac.gCache.Set(key, fetchedData, ac.gCache.defaultExpiration)
+	ac.Set(key, fetchedData, 0)
 	ac.keystatus.Set(key, STATUS_DONE)
-}
-
-func (ac *AsyncCache) Set(key string, data interface{}) {
-	ac.gCache.Set(key, data, ac.gCache.defaultExpiration)
-	ac.keystatus.Set(key, STATUS_DONE) //data already present
-}
-
-func (ac *AsyncCache) SetWithExpiry(key string, data interface{}, t time.Duration) {
-	ac.gCache.Set(key, data, t)
-	ac.keystatus.Set(key, STATUS_DONE) //data is not present
-}
-
-func (ac *AsyncCache) GetFromCache(key string) (interface{}, bool) {
-	return ac.gCache.Get(key)
 }
 
 func (ks *keyStatus) get(key string) Status {
