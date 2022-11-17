@@ -150,8 +150,8 @@ func (ks *keyStatus) purge() {
 
 func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	//Fetching from cache
-	data, ok := ac.Get(key)
-	if ok {
+	data, found := ac.Get(key)
+	if found {
 		return data, STATUS_DONE
 	}
 	ac.keystatus.lock()
@@ -167,7 +167,12 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 	ac.keystatus.unlock()
 	//asyncCall to DB/dataSource
 	go ac.asyncUpdate(key)
-	//returning data and cache/keystatus
+
+	//returning stale data instead of empty with STATUS-DONE
+	if data != nil {
+		return data, STATUS_DONE
+	}
+	// return empty data and in-process for ideal first call
 	return data, STATUS_INPROCESS
 }
 

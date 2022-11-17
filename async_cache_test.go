@@ -284,6 +284,28 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				return *ac
 			}(),
 		},
+		{name: "Returning Expired Stale data instead of Empty",
+			args: args{
+				key: "PROF_5890",
+			},
+			want:       "Expired-Stale-Data",
+			wantStatus: STATUS_DONE,
+			as: func() AsyncCache {
+				f := NewFetcher(4)
+				f.Register("PROF", getProf)
+				f.Register("CONF", getConf)
+				config := Config{
+					Fetcher:             f,
+					PurgeTime:           10 * time.Millisecond,
+					ExpiryTime:          1 * time.Microsecond,
+					ErrorFuncDefination: ErrorHandler,
+				}
+				ac := NewAsyncCache(&config)
+				ac.keystatus.Set("PROF_5890", STATUS_DONE)
+				ac.Set("PROF_5890", "Expired-Stale-Data", ac.defaultExpiration)
+				return *ac
+			}(),
+		},
 	}
 	for _, tt := range tests {
 

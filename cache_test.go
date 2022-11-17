@@ -1769,3 +1769,18 @@ func TestGetWithExpiration(t *testing.T) {
 		t.Error("expiration for e is in the past")
 	}
 }
+
+func TestGet(t *testing.T) {
+	//behavioural change , returns still data if data is expired
+	tc := New(1*time.Microsecond, 0)
+	tc.Set("key", "Expired-Stale-Data", tc.defaultExpiration)
+	//expiring data expilictly
+	time.Sleep(1 * time.Microsecond)
+	data, found := tc.Get("key")
+	if !found && data == nil {
+		t.Error("Cache not returning staled data ")
+	} else if found {
+		t.Errorf("Cache should Return false for staled data")
+	}
+
+}
