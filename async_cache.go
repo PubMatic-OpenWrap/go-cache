@@ -177,7 +177,7 @@ func (ac *AsyncCache) AsyncGet(key string) (interface{}, Status) {
 }
 
 func (ac *AsyncCache) asyncUpdate(key string) {
-	fetchedData, err := ac.Fetcher.Execute(key)
+	fetchedData, err, keyprefExpiry := ac.Fetcher.Execute(key)
 	// fetching and returning data
 	if err != nil {
 		// Response Error from DB/Fetcher error
@@ -185,7 +185,7 @@ func (ac *AsyncCache) asyncUpdate(key string) {
 		ac.errorFunc(key, err)
 		return
 	}
-	ac.Set(key, fetchedData, 0)
+	ac.Set(key, fetchedData, keyprefExpiry)
 	ac.keystatus.Set(key, STATUS_DONE)
 }
 
