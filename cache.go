@@ -128,7 +128,7 @@ func (c *cache) Get(k string) (interface{}, bool) {
 	if item.Expiration > 0 {
 		if time.Now().UnixNano() > item.Expiration {
 			c.mu.RUnlock()
-			return nil, false
+			return item.Object, false
 		}
 	}
 	c.mu.RUnlock()
