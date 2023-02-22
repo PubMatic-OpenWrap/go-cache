@@ -3,16 +3,17 @@ package cache
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
-func Test_fetcher_Register(t *testing.T) {
+func TestFetcherRegister(t *testing.T) {
 	type fields struct {
-		cb        map[string]Callback
+		cb        map[string]CallbackExpiry
 		prefixLen int
 	}
 	type args struct {
 		keyPrefix string
-		cbf       Callback
+		cbf       CallbackExpiry
 	}
 	tests := []struct {
 		name   string
@@ -21,29 +22,43 @@ func Test_fetcher_Register(t *testing.T) {
 		want   bool
 	}{
 		{
-			name:   "Registering Invalid KeyPrefix",
+			name:   "Invalid KeyPrefix",
 			fields: fields(*NewFetcher(5)),
 			args: args{
-				keyPrefix: "AAG0022222",
-				cbf:       nil,
+				keyPrefix: "AAG0",
+				cbf:       CallbackExpiry{nil, 0},
 			},
 			want: false,
 		},
 		{
-			name:   "Registering Empty KeyPrefix",
-			fields: fields(*NewFetcher(5)),
+			name: "Empty KeyPrefix Execution",
+			fields: fields{
+				cb: map[string]CallbackExpiry{
+					"AAG00": {nil, 0},
+					"AAA00": {nil, 0},
+					"AAB00": {nil, 0},
+				},
+				prefixLen: 5,
+			},
 			args: args{
 				keyPrefix: "",
-				cbf:       nil,
+				cbf:       CallbackExpiry{nil, 0},
 			},
 			want: false,
 		},
 		{
-			name:   "Registration Valid KeyPrefix",
-			fields: fields(*NewFetcher(5)),
+			name: "Valid KeyPrefix Callback Registeration",
+			fields: fields{
+				cb: map[string]CallbackExpiry{
+					"AAG00": {nil, 0},
+					"AAA00": {nil, 0},
+					"AAB00": {nil, 0},
+				},
+				prefixLen: 5,
+			},
 			args: args{
-				keyPrefix: "AAG00",
-				cbf:       CbGetAdUnitConfig,
+				keyPrefix: "AAC00",
+				cbf:       CallbackExpiry{CbGetAdUnitConfig, 0},
 			},
 			want: true,
 		},
@@ -61,9 +76,9 @@ func Test_fetcher_Register(t *testing.T) {
 	}
 }
 
-func Test_fetcher_Execute(t *testing.T) {
+func TestFetcherExecute(t *testing.T) {
 	type fields struct {
-		cb        map[string]Callback
+		cb        map[string]CallbackExpiry
 		prefixLen int
 	}
 	type args struct {
@@ -74,29 +89,31 @@ func Test_fetcher_Execute(t *testing.T) {
 		fields  fields
 		args    args
 		want    interface{}
+		want1   time.Duration
 		wantErr bool
 	}{
 		{
 			name: "Invalid Key",
 			fields: fields{
-				cb: map[string]Callback{
-					"AAG00": nil,
+				cb: map[string]CallbackExpiry{
+					"AAG00": {nil, 0},
 				},
 				prefixLen: 5,
 			},
 			args: args{
-				key: "INV",
+				key: "InvK",
 			},
 			want:    nil,
+			want1:   -1,
 			wantErr: true,
 		},
 		{
 			name: "Unexisting Key Execution",
 			fields: fields{
-				cb: map[string]Callback{
-					"AAG00": nil,
-					"AAA00": nil,
-					"AAB00": nil,
+				cb: map[string]CallbackExpiry{
+					"AAG00": {nil, 0},
+					"AAA00": {nil, 0},
+					"AAB00": {nil, 0},
 				},
 				prefixLen: 5,
 			},
@@ -104,15 +121,16 @@ func Test_fetcher_Execute(t *testing.T) {
 				key: "UnExisted_Key",
 			},
 			want:    nil,
+			want1:   -1,
 			wantErr: true,
 		},
 		{
 			name: "Valid Key Execution",
 			fields: fields{
-				cb: map[string]Callback{
-					"AAG00": CbGetAdUnitConfig,
-					"AAA00": nil,
-					"AAB00": nil,
+				cb: map[string]CallbackExpiry{
+					"AAG00": {CbGetAdUnitConfig, 50},
+					"AAA00": {nil, 0},
+					"AAB00": {nil, 0},
 				},
 				prefixLen: 5,
 			},
@@ -120,38 +138,32 @@ func Test_fetcher_Execute(t *testing.T) {
 				key: "AAG00_5890",
 			},
 			want:    "AdUnitConfig",
+			want1:   50,
 			wantErr: false,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &Fetcher{
 				cb:        tt.fields.cb,
 				prefixLen: tt.fields.prefixLen,
 			}
-			got, err := f.Execute(tt.args.key)
-
+			got, err, got1 := f.Execute(tt.args.key)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("fetcher.Execute() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Fetcher.Execute() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("fetcher.Execute() = %v, want %v", got, tt.want)
+				t.Errorf("Fetcher.Execute() got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.want1 {
+				t.Errorf("Fetcher.Execute() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}
 }
 
 func CbGetAdUnitConfig(key string) (interface{}, error) {
-	//Spliting Key to Call Respective DB call
-	//info := strings.Split(key, "_")
-
-	//profileID, _ := strconv.Atoi(info[1])
-	//displayVersionID, _ := strconv.Atoi(info[2])
-
 	data := "AdUnitConfig"
-
 	return data, nil
-
 }

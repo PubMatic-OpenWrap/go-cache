@@ -2,6 +2,7 @@ package cache
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -10,12 +11,13 @@ import (
 
 const EXPIRATION_TIME = 30 * time.Minute
 
+func testDefaultErrHandler(key string, err error) {}
 func Test_keyStatus_Set(t *testing.T) {
 
 	type fields struct {
-		keyMap    map[string]tstatus
-		mu        *sync.RWMutex
-		purgeTime time.Duration
+		keyMap        map[string]tstatus
+		mu            *sync.RWMutex
+		purgeInterval time.Duration
 	}
 	type args struct {
 		key    string
@@ -29,7 +31,7 @@ func Test_keyStatus_Set(t *testing.T) {
 	}{
 		{
 			name:   "With Valid key and state",
-			fields: fields(*NewKeyStatus(EXPIRATION_TIME)),
+			fields: fields(*NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)),
 			args: args{
 				key:    "prof_123",
 				Status: STATUS_INPROCESS,
@@ -38,7 +40,7 @@ func Test_keyStatus_Set(t *testing.T) {
 		},
 		{
 			name:   "With InValid key and state",
-			fields: fields(*NewKeyStatus(EXPIRATION_TIME)),
+			fields: fields(*NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)),
 			args: args{
 				key:    "",
 				Status: STATUS_INPROCESS,
@@ -49,7 +51,7 @@ func Test_keyStatus_Set(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ks := NewKeyStatus(EXPIRATION_TIME)
+			ks := NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)
 			t.Parallel()
 			ks.Set(tt.args.key, tt.args.Status)
 			if ks.Get(tt.args.key) != tt.wantStatus {
@@ -74,7 +76,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		{
 			name: "With Valid key and state as DONE",
 			KeyS: func() keyStatus {
-				ks := NewKeyStatus(EXPIRATION_TIME)
+				ks := NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)
 				ks.Set("prof_123", STATUS_DONE)
 				return *ks
 			}(),
@@ -86,7 +88,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		{
 			name: "With Valid key and state as INPROCESS",
 			KeyS: func() keyStatus {
-				ks := NewKeyStatus(EXPIRATION_TIME)
+				ks := NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)
 				ks.Set("prof_123", STATUS_INPROCESS)
 				return *ks
 			}(),
@@ -98,7 +100,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 		{
 			name: "With Valid key but not present in keyMap",
-			KeyS: *NewKeyStatus(EXPIRATION_TIME),
+			KeyS: *NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler),
 			args: args{
 				key: "getAdUnit_5890",
 			},
@@ -106,7 +108,7 @@ func Test_keyStatus_Get(t *testing.T) {
 		},
 		{
 			name: "With Invalid key and state as INPROCESS",
-			KeyS: *NewKeyStatus(EXPIRATION_TIME),
+			KeyS: *NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler),
 			args: args{
 				key: "",
 			},
@@ -116,7 +118,7 @@ func Test_keyStatus_Get(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ks := NewKeyStatus(EXPIRATION_TIME)
+			ks := NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)
 			ks.keyMap = tt.KeyS.keyMap
 			t.Parallel()
 			if got := ks.Get(tt.args.key); got != tt.want {
@@ -127,7 +129,7 @@ func Test_keyStatus_Get(t *testing.T) {
 }
 
 func testFillKeyCache() map[string]tstatus {
-	ks := NewKeyStatus(25 * time.Millisecond)
+	ks := NewKeyStatus(25*time.Millisecond, testDefaultErrHandler)
 	ks.Set("prof_5890", STATUS_INPROCESS)
 	ks.Set("aucf_739", STATUS_INVALID_KEY)
 	ks.Set("aucf_111", STATUS_INTERNAL_ERROR)
@@ -150,9 +152,9 @@ func Test_keyStatus_Purge(t *testing.T) {
 		{
 			name: "Purging with valid expired keys",
 			fields: &keyStatus{
-				keyMap:    testFillKeyCache(),
-				mu:        &sync.RWMutex{},
-				purgeTime: 25 * time.Millisecond,
+				keyMap:        testFillKeyCache(),
+				mu:            &sync.RWMutex{},
+				purgeInterval: 25 * time.Millisecond,
 			},
 			want: map[string]Status{
 				"prof_Alive2": STATUS_DONE,
@@ -161,9 +163,9 @@ func Test_keyStatus_Purge(t *testing.T) {
 		{
 			name: "Purging with Empty KeyMap",
 			fields: &keyStatus{
-				keyMap:    make(map[string]tstatus),
-				mu:        &sync.RWMutex{},
-				purgeTime: 250 * time.Millisecond,
+				keyMap:        make(map[string]tstatus),
+				mu:            &sync.RWMutex{},
+				purgeInterval: 250 * time.Millisecond,
 			},
 			want: map[string]Status{},
 		},
@@ -171,7 +173,7 @@ func Test_keyStatus_Purge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ks := tt.fields
-			ks.purge()
+			ks.purge(testDefaultErrHandler)
 			if tt.name == "Purging with valid expired keys" {
 				time.Sleep(1000 * time.Millisecond)
 			}
@@ -190,11 +192,11 @@ func Test_keyStatus_Purge(t *testing.T) {
 
 func Benchmark_keyStatus_DeleteKeysWithInbuiltDelete(b *testing.B) {
 	b.StopTimer()
-	ks := NewKeyStatus(EXPIRATION_TIME)
+	ks := NewKeyStatus(EXPIRATION_TIME, testDefaultErrHandler)
 	ks.keyMap = testFillKeyCache()
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		ks.deleteExpiredKeys()
+		ks.deleteExpiredKeys(testDefaultErrHandler)
 	}
 }
 
@@ -226,7 +228,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			wantStatus: STATUS_DONE,
 			as: func() AsyncCache {
 				as1 := InitAsyncCache()
-				as1.gCache.Set("PROF_5890", "profile_5890_201", as1.keystatus.purgeTime)
+				as1.Set("PROF_5890", "profile_5890_201", as1.keystatus.purgeInterval)
 				as1.keystatus.Set("PROF_5890", STATUS_DONE)
 				return *as1
 			}(),
@@ -236,7 +238,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 				key: "CONF_5890",
 			},
 			want:       nil,
-			wantStatus: STATUS_INTERNAL_ERROR,
+			wantStatus: STATUS_INPROCESS,
 			as: func() AsyncCache {
 				as1 := InitAsyncCache()
 				return *as1
@@ -250,9 +252,15 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			wantStatus: STATUS_DONE,
 			as: func() AsyncCache {
 				f := NewFetcher(4)
-				f.Register("PROF", getProf)
-				f.Register("CONF", getConf)
-				ac := NewAsyncCache(f, 8*time.Second, 0)
+				f.Register("PROF", CallbackExpiry{Callback: getProf, PrefixExpiry: 0})
+				f.Register("CONF", CallbackExpiry{Callback: getConf, PrefixExpiry: 0})
+				config := Config{
+					Fetcher:       f,
+					PurgeInterval: 8 * time.Second,
+					ExpiryTime:    0,
+					ErrorFunc:     ErrorHandler,
+				}
+				ac := NewAsyncCache(config)
 				return *ac
 			}(),
 		},
@@ -264,10 +272,38 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 			wantStatus: STATUS_INPROCESS,
 			as: func() AsyncCache {
 				f := NewFetcher(4)
-				f.Register("PROF", getProf)
-				f.Register("CONF", getConf)
-				ac := NewAsyncCache(f, 8*time.Second, 0)
+				f.Register("PROF", CallbackExpiry{Callback: getProf, PrefixExpiry: 0})
+				f.Register("CONF", CallbackExpiry{Callback: getConf, PrefixExpiry: 0})
+				config := Config{
+					Fetcher:       f,
+					PurgeInterval: 8 * time.Second,
+					ExpiryTime:    0,
+					ErrorFunc:     ErrorHandler,
+				}
+				ac := NewAsyncCache(config)
 				ac.keystatus.Set("PROF_5890", STATUS_INPROCESS)
+				return *ac
+			}(),
+		},
+		{name: "Returning Expired Stale data instead of Empty",
+			args: args{
+				key: "PROF_5890",
+			},
+			want:       "Expired-Stale-Data",
+			wantStatus: STATUS_DONE,
+			as: func() AsyncCache {
+				f := NewFetcher(4)
+				f.Register("PROF", CallbackExpiry{Callback: getProf, PrefixExpiry: 0})
+				f.Register("CONF", CallbackExpiry{Callback: getConf, PrefixExpiry: 0})
+				config := Config{
+					Fetcher:       f,
+					PurgeInterval: 10 * time.Millisecond,
+					ExpiryTime:    1 * time.Microsecond,
+					ErrorFunc:     ErrorHandler,
+				}
+				ac := NewAsyncCache(config)
+				ac.keystatus.Set("PROF_5890", STATUS_DONE)
+				ac.Set("PROF_5890", "Expired-Stale-Data", ac.defaultExpiration)
 				return *ac
 			}(),
 		},
@@ -277,7 +313,7 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ac := tt.as
 			//we will be calling AsyncGet to explicitly set the data with key
-			if tt.name == "Demonstrating asyncUpdate call" || tt.name == "With an Invalid datasource response with internal error " {
+			if tt.name == "Demonstrating asyncUpdate call" {
 				ac.AsyncGet(tt.args.key)
 			}
 			time.Sleep(1 * time.Millisecond)
@@ -292,12 +328,21 @@ func TestAsyncCache_AsyncGet(t *testing.T) {
 		})
 	}
 }
+func ErrorHandler(key string, err error) {
+	fmt.Print("Error for ", key, "is ", err)
+}
 
 func InitAsyncCache() *AsyncCache {
 	f := NewFetcher(4)
-	f.Register("PROF", getProf)
-	f.Register("CONF", getConf)
-	ac := NewAsyncCache(f, 8*time.Second, 1000*time.Millisecond)
+	f.Register("PROF", CallbackExpiry{Callback: getProf, PrefixExpiry: 0})
+	f.Register("CONF", CallbackExpiry{Callback: getConf, PrefixExpiry: 0})
+	config := Config{
+		Fetcher:       f,
+		PurgeInterval: 8 * time.Second,
+		ExpiryTime:    1000 * time.Millisecond,
+		ErrorFunc:     testDefaultErrHandler,
+	}
+	ac := NewAsyncCache(config)
 	return ac
 }
 
@@ -321,7 +366,7 @@ func TestAsyncCache_SetInCache(t *testing.T) {
 		args args
 	}{
 		{
-			name: "Setting data in ac.gCache",
+			name: "Setting data in ac.Cache",
 			ac:   *InitAsyncCache(),
 			args: args{
 				key:  "PROF_541",
@@ -332,7 +377,12 @@ func TestAsyncCache_SetInCache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ac1 := tt.ac
-			ac1.Set(tt.args.key, tt.args.data)
+			ac1.Set(tt.args.key, tt.args.data, 0)
+			data, ok := ac1.Get(tt.args.key)
+			if !ok {
+				t.Errorf("data found %v", data)
+			}
+
 		})
 	}
 }
@@ -350,11 +400,11 @@ func TestAsyncCache_SetWithExpiry(t *testing.T) {
 		args args
 	}{
 		{
-			name: "Setting data with expiry in asyncache.gCache",
+			name: "Setting data with expiry in asyncache.Cache",
 			args: args{
 				key:  "PROF_2022",
 				data: "DummyData",
-				t:    500 * time.Millisecond,
+				t:    5000 * time.Millisecond,
 			},
 			ac: *InitAsyncCache(),
 		},
@@ -362,7 +412,77 @@ func TestAsyncCache_SetWithExpiry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ac1 := tt.ac
-			ac1.SetWithExpiry(tt.args.key, tt.args.data, tt.args.t)
+			ac1.Set(tt.args.key, tt.args.data, tt.args.t)
+			data, ok := ac1.Get(tt.args.key)
+			if !ok {
+				t.Errorf("data found %v", data)
+			}
+
 		})
 	}
+}
+
+func TestNewAsyncCache(t *testing.T) {
+	type args struct {
+		aConfig Config
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Config is Empty ",
+			args: args{
+				aConfig: Config{},
+			},
+			want: true,
+		},
+		{
+			name: "Config is Valid",
+			args: args{
+				aConfig: Config{
+					Fetcher:       NewFetcher(23),
+					PurgeInterval: 0,
+					ExpiryTime:    0,
+					ErrorFunc:     testDefaultErrHandler,
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewAsyncCache(tt.args.aConfig); (got != nil) != tt.want {
+				t.Errorf("NewAsyncCache() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrorFuncCalled(t *testing.T) {
+	wasCalled := false
+	ac := func() AsyncCache {
+		f := NewFetcher(4)
+		f.Register("PROF", CallbackExpiry{Callback: func(key string) (interface{}, error) { return nil, ErrRoutineBlocked }, PrefixExpiry: 0})
+		config := Config{
+			Fetcher:       f,
+			PurgeInterval: 10 * time.Millisecond,
+			ExpiryTime:    1 * time.Microsecond,
+			ErrorFunc: func(key string, err error) {
+				wasCalled = true
+			},
+		}
+		ac := NewAsyncCache(config)
+		return *ac
+	}()
+
+	ac.AsyncGet("PROF_23")
+	//to allow goroutine to call ErrorHandler
+	time.Sleep(50 * time.Millisecond)
+
+	if !wasCalled {
+		t.Errorf("errorHandler Not Reachable")
+	}
+
 }
