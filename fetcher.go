@@ -31,15 +31,14 @@ func NewFetcher(prefixLen int) *Fetcher {
 }
 
 //Registering Fetcher with Each Callback Func w. r. t. keyPrefix
-func (f *Fetcher) Register(keyPrefix string, cbf Callback) bool {
+func (f *Fetcher) Register(keyPrefix string, cbfx CallbackExpiry) bool {
 
 	//Case of InValid KeyPrefix
 	if len(keyPrefix) != f.prefixLen {
 		return false
 	}
 
-	expiry := 0
-	cbStruct := CallbackExpiry{cbf, time.Duration(expiry)}
+	cbStruct := CallbackExpiry{cbfx.Callback, cbfx.PrefixExpiry}
 	f.cb[keyPrefix] = cbStruct
 
 	return true

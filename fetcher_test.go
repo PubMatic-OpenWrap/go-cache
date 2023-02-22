@@ -13,7 +13,7 @@ func TestFetcherRegister(t *testing.T) {
 	}
 	type args struct {
 		keyPrefix string
-		cbf       Callback
+		cbf       CallbackExpiry
 	}
 	tests := []struct {
 		name   string
@@ -26,7 +26,7 @@ func TestFetcherRegister(t *testing.T) {
 			fields: fields(*NewFetcher(5)),
 			args: args{
 				keyPrefix: "AAG0",
-				cbf:       nil,
+				cbf:       CallbackExpiry{nil, 0},
 			},
 			want: false,
 		},
@@ -42,7 +42,7 @@ func TestFetcherRegister(t *testing.T) {
 			},
 			args: args{
 				keyPrefix: "",
-				cbf:       nil,
+				cbf:       CallbackExpiry{nil, 0},
 			},
 			want: false,
 		},
@@ -58,7 +58,7 @@ func TestFetcherRegister(t *testing.T) {
 			},
 			args: args{
 				keyPrefix: "AAC00",
-				cbf:       CbGetAdUnitConfig,
+				cbf:       CallbackExpiry{CbGetAdUnitConfig, 0},
 			},
 			want: true,
 		},
