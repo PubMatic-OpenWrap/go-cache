@@ -39,6 +39,7 @@ type Cache struct {
 
 type cache struct {
 	defaultExpiration time.Duration
+	purgeTime         time.Duration
 	items             map[string]Item
 	mu                sync.RWMutex
 	onEvicted         func(string, interface{})
@@ -930,11 +931,12 @@ type keyAndValue struct {
 // Delete all expired items from the cache.
 func (c *cache) DeleteExpired() {
 	var evictedItems []keyAndValue
+	purgeTime := c.purgeTime.Nanoseconds()
 	now := time.Now().UnixNano()
 	c.mu.Lock()
 	for k, v := range c.items {
 		// "Inlining" of expired
-		if v.Expiration > 0 && now > v.Expiration {
+		if v.Expiration > 0 && now > v.Expiration && now > (v.Expiration+purgeTime) {
 			ov, evicted := c.delete(k)
 			if evicted {
 				evictedItems = append(evictedItems, keyAndValue{k, ov})
@@ -1099,19 +1101,20 @@ func runJanitor(c *cache, ci time.Duration) {
 	go j.Run(c)
 }
 
-func newCache(de time.Duration, m map[string]Item) *cache {
+func newCache(de, pt time.Duration, m map[string]Item) *cache {
 	if de == 0 {
 		de = -1
 	}
 	c := &cache{
 		defaultExpiration: de,
+		purgeTime:         pt,
 		items:             m,
 	}
 	return c
 }
 
-func newCacheWithJanitor(de time.Duration, ci time.Duration, m map[string]Item) *Cache {
-	c := newCache(de, m)
+func newCacheWithJanitor(de time.Duration, ci time.Duration, pt time.Duration, m map[string]Item) *Cache {
+	c := newCache(de, pt, m)
 	// This trick ensures that the janitor goroutine (which--granted it
 	// was enabled--is running DeleteExpired on c forever) does not keep
 	// the returned C object from being garbage collected. When it is
@@ -1130,9 +1133,9 @@ func newCacheWithJanitor(de time.Duration, ci time.Duration, m map[string]Item) 
 // the items in the cache never expire (by default), and must be deleted
 // manually. If the cleanup interval is less than one, expired items are not
 // deleted from the cache before calling c.DeleteExpired().
-func New(defaultExpiration, cleanupInterval time.Duration) *Cache {
+func New(defaultExpiration, cleanupInterval, purgeTime time.Duration) *Cache {
 	items := make(map[string]Item)
-	return newCacheWithJanitor(defaultExpiration, cleanupInterval, items)
+	return newCacheWithJanitor(defaultExpiration, cleanupInterval, purgeTime, items)
 }
 
 // Return a new cache with a given default expiration duration and cleanup
@@ -1156,6 +1159,36 @@ func New(defaultExpiration, cleanupInterval time.Duration) *Cache {
 // gob.Register() the individual types stored in the cache before encoding a
 // map retrieved with c.Items(), and to register those same types before
 // decoding a blob containing an items map.
-func NewFrom(defaultExpiration, cleanupInterval time.Duration, items map[string]Item) *Cache {
-	return newCacheWithJanitor(defaultExpiration, cleanupInterval, items)
+func NewFrom(defaultExpiration, cleanupInterval, purgeTime time.Duration, items map[string]Item) *Cache {
+	return newCacheWithJanitor(defaultExpiration, cleanupInterval, purgeTime, items)
+}
+
+// GetWithExpiry returns an item and its expired status from the cache.
+// It returns the item or nil, the expiration time if one is set (if the item
+// never expires a zero value for time.Time is returned), and a bool indicating
+// whether the key was found.
+func (c *cache) GetWithExpiry(k string) (interface{}, bool, bool) {
+	c.mu.RLock()
+	// "Inlining" of get and Expired
+	item, found := c.items[k]
+	if !found {
+		c.mu.RUnlock()
+		return nil, false, false
+	}
+
+	if item.Expiration > 0 {
+		if time.Now().UnixNano() > item.Expiration {
+			c.mu.RUnlock()
+			return item.Object, true, true
+		}
+
+		// Return the item and the expiration time
+		c.mu.RUnlock()
+		return item.Object, false, true
+	}
+
+	// If expiration <= 0 (i.e. no expiration time set) then return the item
+	// and a zeroed time.Time
+	c.mu.RUnlock()
+	return item.Object, false, true
 }

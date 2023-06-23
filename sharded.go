@@ -153,7 +153,7 @@ func runShardedJanitor(sc *shardedCache, ci time.Duration) {
 	go j.Run(sc)
 }
 
-func newShardedCache(n int, de time.Duration) *shardedCache {
+func newShardedCache(n int, de, pt time.Duration) *shardedCache {
 	max := big.NewInt(0).SetUint64(uint64(math.MaxUint32))
 	rnd, err := rand.Int(rand.Reader, max)
 	var seed uint32
@@ -171,6 +171,7 @@ func newShardedCache(n int, de time.Duration) *shardedCache {
 	for i := 0; i < n; i++ {
 		c := &cache{
 			defaultExpiration: de,
+			purgeTime:         pt,
 			items:             map[string]Item{},
 		}
 		sc.cs[i] = c
@@ -178,11 +179,11 @@ func newShardedCache(n int, de time.Duration) *shardedCache {
 	return sc
 }
 
-func unexportedNewSharded(defaultExpiration, cleanupInterval time.Duration, shards int) *unexportedShardedCache {
+func unexportedNewSharded(defaultExpiration, cleanupInterval, purgeTime time.Duration, shards int) *unexportedShardedCache {
 	if defaultExpiration == 0 {
 		defaultExpiration = -1
 	}
-	sc := newShardedCache(shards, defaultExpiration)
+	sc := newShardedCache(shards, defaultExpiration, purgeTime)
 	SC := &unexportedShardedCache{sc}
 	if cleanupInterval > 0 {
 		runShardedJanitor(sc, cleanupInterval)
